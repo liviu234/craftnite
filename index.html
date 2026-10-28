@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,6 +31,19 @@
   button.primary:hover{background:linear-gradient(180deg,#3ee7a4,#15a86f)}
   .err{color:#ff8080;font-size:13px;min-height:18px;text-align:center;max-width:420px}
   .info{font-size:11px;color:#4d637f;letter-spacing:1.5px;text-align:center;max-width:460px;line-height:1.9;margin-top:8px}
+
+  /* selectors */
+  .selector-group{width:min(360px,90vw);background:rgba(16,24,38,.6);
+    border:1px solid rgba(90,140,200,.2);border-radius:10px;padding:10px 14px}
+  .selector-group label{font-size:11px;letter-spacing:2px;color:#7fa8cf;
+    display:block;margin-bottom:8px;font-weight:800}
+  .selector-row{display:flex;gap:6px}
+  .sel-btn{flex:1;padding:8px 4px;font-size:12px;letter-spacing:1px;font-weight:700;
+    background:rgba(10,20,32,.7);border:2px solid rgba(120,200,255,.15);
+    color:#9db8d4;border-radius:6px;cursor:pointer;text-transform:uppercase;transition:.1s}
+  .sel-btn:hover{border-color:#5fd3ff}
+  .sel-btn.active{border-color:#5fd3ff;background:rgba(30,80,130,.7);color:#fff;
+    box-shadow:0 0 8px rgba(95,211,255,.4)}
 
   /* lobby */
   #lobby .panel{background:rgba(16,24,38,.85);border:2px solid rgba(90,140,200,.25);
@@ -84,6 +98,16 @@
   #armorFill{background:linear-gradient(180deg,#7fd4ff,#1f7ad6)}
   #net{position:absolute;top:14px;right:206px;font-size:11px;color:#7fa8cf;letter-spacing:1px}
 
+  /* spectating bar */
+  #spectateBar{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,
+    rgba(4,7,12,.95) 0%, rgba(4,7,12,.6) 80%, transparent 100%);
+    padding:16px 24px 22px;display:flex;flex-direction:column;align-items:center;gap:6px;
+    pointer-events:auto;cursor:pointer}
+  #spectateBar .lbl{font-size:11px;letter-spacing:3px;color:#8fb0d0;font-weight:800}
+  #spectateBar .target{font-size:22px;letter-spacing:2px;font-weight:900;color:#5fd3ff}
+  #spectateBar .hint2{font-size:11px;letter-spacing:1.5px;color:#5f7ea3}
+  #spectateBar:hover .hint2{color:#5fd3ff}
+
   /* results */
   #results{background:rgba(4,7,12,.92);backdrop-filter:blur(6px)}
   #resTitle{font-size:clamp(34px,6vw,64px);font-weight:900;letter-spacing:6px}
@@ -97,12 +121,32 @@
   <h1 class="logo">CRAFTNITE</h1>
   <div class="sub">ROYALE · P2P ONLINE</div>
   <input type="text" id="nameInput" placeholder="Your callsign" maxlength="16" />
+
+  <div class="selector-group">
+    <label>MAP SIZE</label>
+    <div class="selector-row" id="mapSelector">
+      <button class="sel-btn" data-map="2000">Small</button>
+      <button class="sel-btn active" data-map="3000">Medium</button>
+      <button class="sel-btn" data-map="4000">Large</button>
+    </div>
+  </div>
+
+  <div class="selector-group">
+    <label>BOTS</label>
+    <div class="selector-row" id="botSelector">
+      <button class="sel-btn" data-bots="0">None</button>
+      <button class="sel-btn" data-bots="2">2</button>
+      <button class="sel-btn active" data-bots="4">4</button>
+      <button class="sel-btn" data-bots="6">6</button>
+    </div>
+  </div>
+
   <div class="menu-buttons">
     <button class="primary" id="btnHost">Host Match</button>
     <button id="btnJoin">Join with Code</button>
   </div>
   <div class="err" id="menuErr"></div>
-  <div class="info">Real peer-to-peer multiplayer via WebRTC · Room codes are 6 characters</div>
+  <div class="info">Map & bots are chosen by the host · Joiners use their settings</div>
 </div>
 
 <div id="lobby" class="screen hidden">
@@ -135,6 +179,12 @@
     <div class="bar"><i id="armorFill" style="width:0%"></i><span id="armorTxt"></span></div>
     <div class="bar"><i id="hpFill" style="width:100%"></i><span id="hpTxt"></span></div>
   </div>
+
+  <div id="spectateBar" class="hidden">
+    <div class="lbl">SPECTATING</div>
+    <div class="target" id="spectateName">—</div>
+    <div class="hint2" id="spectateHint">Click or press SPACE to cycle · surviving players</div>
+  </div>
 </div>
 
 <div id="results" class="screen hidden">
@@ -151,22 +201,46 @@
 'use strict';
 
 // ============================================================
-// CONFIG
+// CONFIG (map size is dynamic — set by host)
 // ============================================================
-const MAP_W = 3000, MAP_H = 3000;
+let MAP_W = 3000, MAP_H = 3000;
+let NUM_BOTS = 4;
+
 const PLAYER_RADIUS = 18;
 const PLAYER_SPEED = 220;
-const TICK_MS = 50;           // server (host) tick = 20Hz
-const INPUT_HZ = 33;          // client input send rate
-const INTERP_DELAY = 100;     // remote players rendered 100ms behind
+const TICK_MS = 50;
+const INPUT_HZ = 33;
+const INTERP_DELAY = 100;
 const MAX_PLAYERS = 8;
 
 const WEAPONS = {
-  pistol:  { name:'Pistol',  damage:22, fireRate:350,  magSize:12, reload:1200, range:700,  spread:0.03,  pellets:1, color:'#ffd166' },
-  smg:     { name:'SMG',     damage:13, fireRate:90,   magSize:30, reload:1600, range:550,  spread:0.09,  pellets:1, color:'#8bc34a' },
-  ar:      { name:'Rifle',   damage:26, fireRate:140,  magSize:30, reload:2000, range:900,  spread:0.04,  pellets:1, color:'#39c7ff' },
-  shotgun: { name:'Shotgun', damage:15, fireRate:750,  magSize:6,  reload:2200, range:400,  spread:0.16,  pellets:6, color:'#ff9f45' },
-  sniper:  { name:'Sniper',  damage:85, fireRate:1200, magSize:5,  reload:2800, range:1500, spread:0.005, pellets:1, color:'#b06bff' }
+  pistol: {
+    name:'Pistol', damage:22, fireRate:350, magSize:12, reload:1200, range:700,
+    spread:0.03, pellets:1, color:'#ffd166',
+    pattern: [0], patternReset: 500
+  },
+  smg: {
+    name:'SMG', damage:13, fireRate:90, magSize:30, reload:1600, range:550,
+    spread:0.09, pellets:1, color:'#8bc34a',
+    pattern: [0, -0.045, 0.04, -0.055, 0.05, -0.03, 0.055, -0.035, 0.045, -0.05],
+    patternReset: 450
+  },
+  ar: {
+    name:'Rifle', damage:26, fireRate:140, magSize:30, reload:2000, range:900,
+    spread:0.04, pellets:1, color:'#39c7ff',
+    pattern: [0, -0.01, 0.01, -0.02, 0.02, -0.03, 0.03, -0.04, 0.04, -0.035, 0.03, -0.025, 0.02, -0.015, 0.01, 0],
+    patternReset: 750
+  },
+  shotgun: {
+    name:'Shotgun', damage:15, fireRate:750, magSize:6, reload:2200, range:400,
+    spread:0.10, pellets:7, color:'#ff9f45',
+    pattern: [0], patternReset: 800
+  },
+  sniper: {
+    name:'Sniper', damage:85, fireRate:1200, magSize:5, reload:2800, range:1500,
+    spread:0.003, pellets:1, color:'#b06bff',
+    pattern: [0], patternReset: 1500
+  }
 };
 const ZONE_PHASES = [
   { wait:15000, shrink:12000, factor:0.62, dmg:1  },
@@ -184,7 +258,6 @@ const $ = id => document.getElementById(id);
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const lerp = (a,b,t) => a + (b-a)*t;
 const rand = (a,b) => a + Math.random()*(b-a);
-const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 
 function rayCircle(ox, oy, dx, dy, cx, cy, r){
   const ex = ox-cx, ey = oy-cy;
@@ -215,17 +288,23 @@ const obstacles = [];
 
 function generateMap(){
   obstacles.length = 0;
-  for (let i = 0; i < 22; i++){
+  // Scale obstacle counts with map size
+  const scale = (MAP_W * MAP_H) / (3000 * 3000);
+  const buildings = Math.round(22 * scale);
+  const rocks     = Math.round(40 * scale);
+  const trees     = Math.round(140 * scale);
+
+  for (let i = 0; i < buildings; i++){
     const w = rand(120, 240), h = rand(120, 240);
     obstacles.push({ x: rand(150, MAP_W-w-150), y: rand(150, MAP_H-h-150),
                      w, h, kind:'building' });
   }
-  for (let i = 0; i < 40; i++){
+  for (let i = 0; i < rocks; i++){
     const r = rand(25, 50);
     obstacles.push({ x: rand(80, MAP_W-80), y: rand(80, MAP_H-80),
                      w: r*2, h: r*2, kind:'rock' });
   }
-  for (let i = 0; i < 140; i++){
+  for (let i = 0; i < trees; i++){
     const r = rand(22, 38);
     obstacles.push({ x: rand(50, MAP_W-50), y: rand(50, MAP_H-50),
                      w: r*2, h: r*2, kind:'tree' });
@@ -249,15 +328,23 @@ let isHost = false;
 let myId = null;
 let myName = '';
 let peer = null;
-let connections = new Map();   // host: peerId -> DataConnection
-let hostConnection = null;     // client: connection to host
+let connections = new Map();
+let hostConnection = null;
 let gameRunning = false;
 
 let inputSeq = 0;
 let localPredX = 0, localPredY = 0;
 const remoteHistories = new Map();
-const effects = [];            // muzzle flashes
+const effects = [];
 const damageTexts = [];
+
+// Spectating
+let isSpectating = false;
+let spectateTargetId = null;
+
+// Menu selections
+let selectedMapSize = 3000;
+let selectedBots = 4;
 
 // Host-only
 let hostLoop = null;
@@ -277,7 +364,7 @@ function resize(){ canvas.width = window.innerWidth; canvas.height = window.inne
 window.addEventListener('resize', resize); resize();
 
 // ============================================================
-// AUDIO (minimal)
+// AUDIO
 // ============================================================
 let audioCtx = null;
 function initAudio(){
@@ -313,6 +400,7 @@ function createInitialState(){
     matchState: 'waiting',
     winner: '',
     winnerId: '',
+    matchPlayerCount: 0,
     players: {},
     loot: {},
     zone: {
@@ -332,9 +420,49 @@ function makePlayer(id, name, isBot){
     ammo: 12, reserve: 120,
     isReloading: false, reloadEnd: 0,
     lastFireTime: 0,
+    patternIndex: 0,
+    lastPatternAt: 0,
     alive: true, kills: 0,
     inputSeq: 0
   };
+}
+
+// ============================================================
+// EQUAL SPAWN DISTRIBUTION
+// ============================================================
+function distributeSpawns(){
+  const players = Object.values(state.players);
+  const n = players.length;
+  if (n === 0) return;
+  const centerX = MAP_W / 2;
+  const centerY = MAP_H / 2;
+  const spawnRadius = Math.min(MAP_W, MAP_H) * 0.36;
+  const startOffset = Math.random() * Math.PI * 2;
+
+  players.forEach((p, i) => {
+    const baseAngle = startOffset + (i / n) * Math.PI * 2;
+    let placed = false;
+    for (let attempt = 0; attempt < 30 && !placed; attempt++){
+      const angleJitter = attempt === 0 ? 0 : (Math.random() - 0.5) * 0.35 * attempt;
+      const angle = baseAngle + angleJitter;
+      const rJitter = attempt === 0 ? 0 : (Math.random() - 0.5) * 80 * attempt;
+      const r = spawnRadius + rJitter;
+      let x = centerX + Math.cos(angle) * r;
+      let y = centerY + Math.sin(angle) * r;
+      x = clamp(x, 100, MAP_W - 100);
+      y = clamp(y, 100, MAP_H - 100);
+      if (!collides(x, y, PLAYER_RADIUS + 25)){
+        p.x = x;
+        p.y = y;
+        placed = true;
+      }
+    }
+    if (!placed){
+      // Fallback: use a random edge position
+      p.x = rand(200, MAP_W - 200);
+      p.y = rand(200, MAP_H - 200);
+    }
+  });
 }
 
 // ============================================================
@@ -344,6 +472,7 @@ function hostStart(){
   state.matchState = 'playing';
   state.winner = '';
   state.tick = 0;
+  state.matchPlayerCount = Object.keys(state.players).length;
   state.zone = {
     x: MAP_W/2, y: MAP_H/2, radius: ZONE_START_RADIUS,
     nextX: MAP_W/2, nextY: MAP_H/2, nextRadius: ZONE_START_RADIUS,
@@ -359,21 +488,26 @@ function hostStart(){
     p.isReloading = false; p.reloadEnd = 0;
     p.kills = 0;
     p.alive = true;
-    p.x = rand(300, MAP_W-300);
-    p.y = rand(300, MAP_H-300);
     p.lastFireTime = 0;
+    p.patternIndex = 0;
+    p.lastPatternAt = 0;
   }
 
-  state.loot = {};
-  for (let i = 0; i < 80; i++) hostSpawnLoot();
-
-  // Fill with bots up to 4 total
+  // Add bots per host selection
   let botCount = 0;
   for (const p of Object.values(state.players)) if (p.isBot) botCount++;
-  for (let i = botCount; i < 4; i++){
+  for (let i = botCount; i < NUM_BOTS; i++){
     const bid = 'BOT_' + Math.random().toString(36).slice(2, 8).toUpperCase();
     state.players[bid] = makePlayer(bid, 'Bot ' + bid.slice(-3), true);
   }
+
+  // Equal spawns
+  distributeSpawns();
+
+  // Clear & spawn loot
+  state.loot = {};
+  const lootCount = Math.round(80 * (MAP_W * MAP_H) / (3000 * 3000));
+  for (let i = 0; i < lootCount; i++) hostSpawnLoot();
 
   broadcastState();
   broadcastNotice('Match started!');
@@ -410,11 +544,18 @@ function hostTick(){
   broadcastState();
 
   const alive = Object.values(state.players).filter(p => p.alive);
-  if (alive.length <= 1){
+  if (alive.length === 0){
     state.matchState = 'ended';
-    state.winner = alive[0]?.name || 'Nobody';
-    state.winnerId = alive[0]?.id || '';
-    broadcastMsg({ type:'matchEnd', winnerId: state.winnerId, winnerName: state.winner });
+    state.winner = 'Nobody';
+    state.winnerId = '';
+    broadcastMsg({ type:'matchEnd', winnerId:'', winnerName:'Nobody' });
+    broadcastState();
+    if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
+  } else if (alive.length === 1 && state.matchPlayerCount >= 2){
+    state.matchState = 'ended';
+    state.winner = alive[0].name;
+    state.winnerId = alive[0].id;
+    broadcastMsg({ type:'matchEnd', winnerId: alive[0].id, winnerName: alive[0].name });
     broadcastState();
     if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
   }
@@ -466,6 +607,9 @@ function hostUpdateZone(dt){
   }
 }
 
+// ============================================================
+// FIRING — with per-weapon patterns
+// ============================================================
 function hostFire(id, rotation){
   const p = state.players[id];
   if (!p || !p.alive || p.isReloading) return;
@@ -477,15 +621,39 @@ function hostFire(id, rotation){
   p.lastFireTime = now;
   p.ammo--;
 
-  broadcastMsg({ type:'fireEvent', id: p.id, x:p.x, y:p.y,
-                rotation, weapon:p.weapon });
+  // Fire pattern: cycle through offsets; reset after cooldown
+  if (now - (p.lastPatternAt || 0) > (w.patternReset || 500)){
+    p.patternIndex = 0;
+  }
+  p.lastPatternAt = now;
+  const pat = w.pattern || [0];
+  const patternOffset = pat[(p.patternIndex || 0) % pat.length];
+  p.patternIndex = (p.patternIndex || 0) + 1;
+
+  broadcastMsg({
+    type: 'fireEvent', id: p.id, x: p.x, y: p.y,
+    rotation: rotation + patternOffset,
+    weapon: p.weapon, patternOffset
+  });
 
   const victims = new Set();
-  for (let i = 0; i < w.pellets; i++){
-    const angle = rotation + (Math.random()-0.5)*w.spread*2;
-    const victimId = hostRaycastPlayer(p.x, p.y, angle, w.range, id);
-    if (victimId) victims.add(victimId);
+  const pellets = w.pellets || 1;
+
+  if (pellets > 1){
+    // Shotgun: fan of pellets
+    for (let i = 0; i < pellets; i++){
+      const t = (i / (pellets - 1)) * 2 - 1; // -1..1
+      const angle = rotation + patternOffset + t * w.spread;
+      const vId = hostRaycastPlayer(p.x, p.y, angle, w.range, id);
+      if (vId) victims.add(vId);
+    }
+  } else {
+    // Single projectile with pattern + spread
+    const angle = rotation + patternOffset + (Math.random() - 0.5) * w.spread * 2;
+    const vId = hostRaycastPlayer(p.x, p.y, angle, w.range, id);
+    if (vId) victims.add(vId);
   }
+
   for (const vid of victims){
     const victim = state.players[vid];
     if (victim) hostDamage(victim, w.damage, id);
@@ -557,6 +725,8 @@ function hostSwitchWeapon(id, weapon){
   p.weapon = weapon;
   p.ammo = Math.min(WEAPONS[weapon].magSize, p.reserve);
   p.reserve -= p.ammo;
+  p.patternIndex = 0;
+  p.lastPatternAt = 0;
 }
 
 function hostSpawnLoot(x, y, type, weapon){
@@ -587,6 +757,8 @@ function hostPickup(playerId, lootId){
     p.weapon = l.weapon;
     p.ammo = WEAPONS[l.weapon].magSize;
     p.reserve = Math.max(p.reserve, 60);
+    p.patternIndex = 0;
+    p.lastPatternAt = 0;
   } else if (l.type === 'ammo'){
     p.reserve += 40;
   } else if (l.type === 'health'){
@@ -686,8 +858,10 @@ function sendToHost(msg){
 function hostRoom(name, onReady, onError){
   isHost = true;
   myName = name;
-  state = createInitialState();
+  MAP_W = MAP_H = selectedMapSize;
+  NUM_BOTS = selectedBots;
   generateMap();
+  state = createInitialState();
   const code = makeCode();
 
   peer = new Peer(code, { debug: 0 });
@@ -719,7 +893,8 @@ function hostRoom(name, onReady, onError){
       state.players[pid] = makePlayer(pid, peerName);
       connections.set(pid, conn);
 
-      conn.send({ type:'welcome', playerId: pid, mapData: { obstacles } });
+      conn.send({ type:'welcome', playerId: pid,
+                  mapData: { obstacles, mapW: MAP_W, mapH: MAP_H } });
       conn.send({ type:'state', state });
 
       broadcastNotice(peerName + ' joined');
@@ -759,11 +934,17 @@ function hostRoom(name, onReady, onError){
       }
       if (state.matchState === 'playing'){
         const alive = Object.values(state.players).filter(x => x.alive);
-        if (alive.length <= 1){
+        if (alive.length === 0){
           state.matchState = 'ended';
-          state.winner = alive[0]?.name || 'Nobody';
-          state.winnerId = alive[0]?.id || '';
-          broadcastMsg({ type:'matchEnd', winnerId: state.winnerId, winnerName: state.winner });
+          state.winner = 'Nobody';
+          broadcastMsg({ type:'matchEnd', winnerId:'', winnerName:'Nobody' });
+          broadcastState();
+          if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
+        } else if (alive.length === 1 && state.matchPlayerCount >= 2){
+          state.matchState = 'ended';
+          state.winner = alive[0].name;
+          state.winnerId = alive[0].id;
+          broadcastMsg({ type:'matchEnd', winnerId: alive[0].id, winnerName: alive[0].name });
           broadcastState();
           if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
         }
@@ -775,7 +956,7 @@ function hostRoom(name, onReady, onError){
 function joinRoom(code, name, onReady, onError){
   isHost = false;
   myName = name;
-  state = { players: {}, loot: {}, zone: null, matchState: 'waiting', tick: 0 };
+  state = { players: {}, loot: {}, zone: null, matchState: 'waiting', tick: 0, matchPlayerCount: 0 };
 
   peer = new Peer({ debug: 0 });
 
@@ -790,9 +971,11 @@ function joinRoom(code, name, onReady, onError){
       switch (msg.type){
         case 'welcome':
           myId = msg.playerId;
-          if (msg.mapData && msg.mapData.obstacles){
+          if (msg.mapData){
             obstacles.length = 0;
-            obstacles.push(...msg.mapData.obstacles);
+            if (msg.mapData.obstacles) obstacles.push(...msg.mapData.obstacles);
+            if (msg.mapData.mapW) MAP_W = msg.mapData.mapW;
+            if (msg.mapData.mapH) MAP_H = msg.mapData.mapH;
           }
           break;
         case 'state':
@@ -809,11 +992,12 @@ function joinRoom(code, name, onReady, onError){
           break;
         case 'fireEvent':
           if (msg.id === myId) break;
+          const wDef = WEAPONS[msg.weapon];
           effects.push({
             x0: msg.x, y0: msg.y,
-            x1: msg.x + Math.cos(msg.rotation) * WEAPONS[msg.weapon].range,
-            y1: msg.y + Math.sin(msg.rotation) * WEAPONS[msg.weapon].range,
-            t: 100, maxT: 100, color: WEAPONS[msg.weapon].color
+            x1: msg.x + Math.cos(msg.rotation) * wDef.range,
+            y1: msg.y + Math.sin(msg.rotation) * wDef.range,
+            t: 100, maxT: 100, color: wDef.color
           });
           break;
         case 'hit':
@@ -866,19 +1050,30 @@ function joinRoom(code, name, onReady, onError){
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'KeyR') sendToHost({ type:'reload' });
-  if (e.code === 'Digit1') sendToHost({ type:'switchWeapon', weapon:'pistol' });
-  if (e.code === 'Digit2') sendToHost({ type:'switchWeapon', weapon:'smg' });
-  if (e.code === 'Digit3') sendToHost({ type:'switchWeapon', weapon:'ar' });
-  if (e.code === 'Digit4') sendToHost({ type:'switchWeapon', weapon:'shotgun' });
-  if (e.code === 'Digit5') sendToHost({ type:'switchWeapon', weapon:'sniper' });
+  if (e.code === 'Space' && isSpectating){
+    e.preventDefault();
+    cycleSpectateTarget();
+    return;
+  }
+  if (gameRunning){
+    if (e.code === 'KeyR') sendToHost({ type:'reload' });
+    if (e.code === 'Digit1') sendToHost({ type:'switchWeapon', weapon:'pistol' });
+    if (e.code === 'Digit2') sendToHost({ type:'switchWeapon', weapon:'smg' });
+    if (e.code === 'Digit3') sendToHost({ type:'switchWeapon', weapon:'ar' });
+    if (e.code === 'Digit4') sendToHost({ type:'switchWeapon', weapon:'shotgun' });
+    if (e.code === 'Digit5') sendToHost({ type:'switchWeapon', weapon:'sniper' });
+  }
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 let mouseX = 0, mouseY = 0, mouseDown = false;
 canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 canvas.addEventListener('mousedown', e => {
-  if (e.button === 0){ mouseDown = true; initAudio(); }
+  if (e.button === 0){
+    mouseDown = true;
+    initAudio();
+    if (isSpectating) cycleSpectateTarget();
+  }
 });
 window.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -892,7 +1087,6 @@ function computeRotation(){
   return Math.atan2(m.y - me.y, m.x - me.x);
 }
 
-// Input send loop
 setInterval(() => {
   if (!gameRunning || !state || state.matchState !== 'playing') return;
   const me = getMe();
@@ -908,7 +1102,6 @@ setInterval(() => {
   else sendToHost({ type:'input', input });
 }, 1000 / INPUT_HZ);
 
-// Fire loop
 let lastSentFire = 0;
 setInterval(() => {
   if (!gameRunning || !state || state.matchState !== 'playing') return;
@@ -925,19 +1118,76 @@ setInterval(() => {
   sfx.shot();
 }, 20);
 
-// Auto-pickup loop
 setInterval(() => {
   if (!gameRunning || !state || state.matchState !== 'playing') return;
   const me = getMe();
   if (!me || !me.alive) return;
   for (const l of Object.values(state.loot)){
     if (Math.hypot(l.x - me.x, l.y - me.y) < 40){
-      sendToHost({ type:'pickup', lootId: l.id });
       if (isHost) hostPickup(myId, l.id);
+      else sendToHost({ type:'pickup', lootId: l.id });
       sfx.pickup();
     }
   }
 }, 200);
+
+// ============================================================
+// SPECTATING
+// ============================================================
+function updateSpectatorState(){
+  const me = getMe();
+  if (!me) return;
+
+  if (me.alive){
+    if (isSpectating){
+      isSpectating = false;
+      spectateTargetId = null;
+      $('spectateBar').classList.add('hidden');
+    }
+    return;
+  }
+
+  if (state.matchState !== 'playing') return;
+
+  if (!isSpectating){
+    isSpectating = true;
+    const alive = Object.values(state.players).filter(p => p.alive);
+    if (alive.length > 0) spectateTargetId = alive[0].id;
+  }
+
+  // Validate target
+  if (spectateTargetId){
+    const t = state.players[spectateTargetId];
+    if (!t || !t.alive){
+      spectateTargetId = null;
+    }
+  }
+  if (!spectateTargetId){
+    const alive = Object.values(state.players).filter(p => p.alive);
+    if (alive.length > 0) spectateTargetId = alive[0].id;
+  }
+
+  // Update spectate bar UI
+  if (isSpectating && spectateTargetId && state.players[spectateTargetId]){
+    $('spectateBar').classList.remove('hidden');
+    $('spectateName').textContent = state.players[spectateTargetId].name;
+    const aliveCount = Object.values(state.players).filter(p => p.alive).length;
+    $('spectateHint').textContent =
+      'Click or press SPACE to cycle · ' + aliveCount + ' surviving';
+  } else if (isSpectating){
+    $('spectateBar').classList.remove('hidden');
+    $('spectateName').textContent = '—';
+    $('spectateHint').textContent = 'No one left to spectate';
+  }
+}
+
+function cycleSpectateTarget(){
+  const alive = Object.values(state.players).filter(p => p.alive);
+  if (alive.length === 0) return;
+  const idx = alive.findIndex(p => p.id === spectateTargetId);
+  spectateTargetId = alive[(idx + 1) % alive.length].id;
+  $('spectateName').textContent = state.players[spectateTargetId].name;
+}
 
 // ============================================================
 // PREDICTION
@@ -945,6 +1195,7 @@ setInterval(() => {
 function updatePrediction(dt){
   const me = getMe();
   if (!me) return;
+  if (!me.alive) return;
   if (localPredX === 0 && localPredY === 0){ localPredX = me.x; localPredY = me.y; }
 
   let dx = 0, dy = 0;
@@ -985,6 +1236,120 @@ function interpolatePosition(pid){
 }
 
 // ============================================================
+// LOOT VISUALS
+// ============================================================
+function drawWeaponIcon(x, y, weaponKey, size){
+  const w = WEAPONS[weaponKey];
+  if (!w) return;
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Badge
+  ctx.fillStyle = w.color;
+  ctx.beginPath();
+  ctx.arc(0, 0, size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Silhouette
+  ctx.fillStyle = '#141920';
+  const s = size / 18; // scale factor
+
+  if (weaponKey === 'pistol'){
+    ctx.fillRect(-6*s, -2*s, 12*s, 4*s);
+    ctx.fillRect(-3*s, 1*s, 4*s, 6*s);
+  } else if (weaponKey === 'smg'){
+    ctx.fillRect(-8*s, -2*s, 14*s, 3*s);
+    ctx.fillRect(-5*s, 1*s, 3*s, 6*s);
+    ctx.fillRect(3*s, -4*s, 2*s, 4*s);
+  } else if (weaponKey === 'ar'){
+    ctx.fillRect(-10*s, -2*s, 17*s, 3*s);
+    ctx.fillRect(-4*s, 1*s, 3*s, 6*s);
+    ctx.fillRect(2*s, -4*s, 5*s, 2*s);
+    ctx.fillRect(5*s, -6*s, 2*s, 2*s);
+  } else if (weaponKey === 'shotgun'){
+    ctx.fillRect(-11*s, -2*s, 18*s, 4*s);
+    ctx.fillRect(-2*s, 2*s, 3*s, 5*s);
+    ctx.fillRect(-11*s, -3*s, 3*s, 6*s);
+  } else if (weaponKey === 'sniper'){
+    ctx.fillRect(-12*s, -1.5*s, 21*s, 3*s);
+    ctx.fillRect(-4*s, 1.5*s, 3*s, 5*s);
+    ctx.fillRect(0, -5*s, 8*s, 2*s);
+    ctx.fillRect(2, -7*s, 2*s, 3*s);
+    ctx.fillRect(-12*s, -3*s, 2*s, 6*s);
+  }
+  ctx.restore();
+}
+
+function drawAmmoIcon(x, y, size){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#cddc39';
+  ctx.fillRect(-size*0.7, -size*0.7, size*1.4, size*1.4);
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-size*0.7, -size*0.7, size*1.4, size*1.4);
+  // bullets
+  ctx.fillStyle = '#2c3200';
+  for (let i = 0; i < 3; i++){
+    const bx = -size*0.5 + i * size*0.45;
+    ctx.beginPath();
+    ctx.moveTo(bx - 2, size*0.4);
+    ctx.lineTo(bx - 2, size*0.05);
+    ctx.lineTo(bx, -size*0.25);
+    ctx.lineTo(bx + 2, size*0.05);
+    ctx.lineTo(bx + 2, size*0.4);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawHealthIcon(x, y, size){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#4caf50';
+  ctx.fillRect(-size*0.7, -size*0.7, size*1.4, size*1.4);
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-size*0.7, -size*0.7, size*1.4, size*1.4);
+  // red cross
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-3, -8, 6, 16);
+  ctx.fillRect(-8, -3, 16, 6);
+  ctx.restore();
+}
+
+function drawArmorIcon(x, y, size){
+  ctx.save();
+  ctx.translate(x, y);
+  const r = size * 0.75;
+  ctx.fillStyle = '#29b6f6';
+  ctx.beginPath();
+  ctx.moveTo(0, -r);
+  ctx.lineTo(r * 0.9, -r * 0.4);
+  ctx.lineTo(r * 0.7, r * 0.6);
+  ctx.lineTo(0, r);
+  ctx.lineTo(-r * 0.7, r * 0.6);
+  ctx.lineTo(-r * 0.9, -r * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // inner shine
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.7);
+  ctx.lineTo(r * 0.5, -r * 0.2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
 // RENDERING
 // ============================================================
 let lastFrameTime = performance.now();
@@ -997,12 +1362,18 @@ function render(){
   if (!state) return;
   const me = getMe();
 
-  if (me){
-    const px = (me.id === myId) ? localPredX : me.x;
-    const py = (me.id === myId) ? localPredY : me.y;
-    cameraX = lerp(cameraX, px - W/2, 0.15);
-    cameraY = lerp(cameraY, py - H/2, 0.15);
+  // Camera target: local player OR spectate target
+  let camTX = MAP_W / 2, camTY = MAP_H / 2;
+  if (me && me.alive){
+    camTX = localPredX;
+    camTY = localPredY;
+  } else if (isSpectating && spectateTargetId && state.players[spectateTargetId]){
+    const interp = interpolatePosition(spectateTargetId);
+    camTX = interp.x;
+    camTY = interp.y;
   }
+  cameraX = lerp(cameraX, camTX - W/2, 0.15);
+  cameraY = lerp(cameraY, camTY - H/2, 0.15);
 
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
@@ -1018,6 +1389,11 @@ function render(){
     ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX+W, y); ctx.stroke();
   }
 
+  // Map border
+  ctx.strokeStyle = 'rgba(95,211,255,0.25)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, MAP_W, MAP_H);
+
   // Obstacles
   for (const o of obstacles){
     if (o.x + o.w < cameraX || o.x > cameraX + W) continue;
@@ -1025,14 +1401,34 @@ function render(){
     if (o.kind === 'building'){
       ctx.fillStyle = '#6b4a2b';
       ctx.fillRect(o.x, o.y, o.w, o.h);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 2;
       ctx.strokeRect(o.x, o.y, o.w, o.h);
+      // windows
+      ctx.fillStyle = 'rgba(255,220,130,0.35)';
+      const ww = o.w * 0.15, wh = o.h * 0.15;
+      ctx.fillRect(o.x + o.w*0.2, o.y + o.h*0.2, ww, wh);
+      ctx.fillRect(o.x + o.w*0.65, o.y + o.h*0.2, ww, wh);
+      ctx.fillRect(o.x + o.w*0.2, o.y + o.h*0.65, ww, wh);
+      ctx.fillRect(o.x + o.w*0.65, o.y + o.h*0.65, ww, wh);
     } else if (o.kind === 'rock'){
+      const cx = o.x + o.w/2, cy = o.y + o.h/2;
       ctx.fillStyle = '#5a5f66';
-      ctx.beginPath(); ctx.arc(o.x+o.w/2, o.y+o.h/2, o.w/2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, o.w/2, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.arc(cx - o.w*0.15, cy - o.h*0.15, o.w*0.18, 0, Math.PI*2); ctx.fill();
     } else if (o.kind === 'tree'){
-      ctx.fillStyle = '#2a6b32';
-      ctx.beginPath(); ctx.arc(o.x+o.w/2, o.y+o.h/2, o.w/2, 0, Math.PI*2); ctx.fill();
+      const cx = o.x + o.w/2, cy = o.y + o.h/2;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.arc(cx + 6, cy + 8, o.w/2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#1e5a24';
+      ctx.beginPath(); ctx.arc(cx, cy, o.w/2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#2a7a32';
+      ctx.beginPath(); ctx.arc(cx - o.w*0.15, cy - o.h*0.15, o.w*0.35, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#3fa04a';
+      ctx.beginPath(); ctx.arc(cx - o.w*0.2, cy - o.h*0.2, o.w*0.15, 0, Math.PI*2); ctx.fill();
     }
   }
 
@@ -1040,42 +1436,68 @@ function render(){
   for (const l of Object.values(state.loot)){
     if (l.x < cameraX - 50 || l.x > cameraX + W + 50) continue;
     if (l.y < cameraY - 50 || l.y > cameraY + H + 50) continue;
-    let color = '#ffd166';
-    if (l.type === 'weapon') color = '#ff9f45';
-    else if (l.type === 'ammo') color = '#cddc39';
-    else if (l.type === 'health') color = '#4caf50';
-    else if (l.type === 'armor') color = '#29b6f6';
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(l.x, l.y, 14, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+    if (l.type === 'weapon') drawWeaponIcon(l.x, l.y, l.weapon, 18);
+    else if (l.type === 'ammo') drawAmmoIcon(l.x, l.y, 14);
+    else if (l.type === 'health') drawHealthIcon(l.x, l.y, 14);
+    else if (l.type === 'armor') drawArmorIcon(l.x, l.y, 16);
   }
 
   // Players
   for (const p of Object.values(state.players)){
     if (!p.alive) continue;
     let px, py;
-    if (p.id === myId){ px = localPredX; py = localPredY; }
-    else { const interp = interpolatePosition(p.id); px = interp.x; py = interp.y; }
+    if (p.id === myId && me && me.alive){
+      px = localPredX; py = localPredY;
+    } else {
+      const interp = interpolatePosition(p.id);
+      px = interp.x; py = interp.y;
+    }
 
-    const color = p.id === myId ? '#5fd3ff' : (p.isBot ? '#ff8a65' : '#ffd166');
+    const isMe = p.id === myId;
+    const isSpecTarget = p.id === spectateTargetId;
+    const color = isMe ? '#5fd3ff' : (p.isBot ? '#ff8a65' : '#ffd166');
+
+    // glow ring for spectate target
+    if (isSpecTarget && isSpectating){
+      ctx.fillStyle = 'rgba(95,211,255,0.18)';
+      ctx.beginPath(); ctx.arc(px, py, PLAYER_RADIUS + 10, 0, Math.PI*2); ctx.fill();
+    }
+
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.arc(px + 3, py + 5, PLAYER_RADIUS, 0, Math.PI*2); ctx.fill();
+
+    // body
     ctx.fillStyle = color;
     ctx.beginPath(); ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
 
+    // weapon
     const wx = px + Math.cos(p.rotation) * 26;
     const wy = py + Math.sin(p.rotation) * 26;
     ctx.strokeStyle = '#222'; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(wx, wy); ctx.stroke();
-    ctx.strokeStyle = '#eee'; ctx.lineWidth = 3;
+    ctx.strokeStyle = WEAPONS[p.weapon]?.color || '#eee';
+    ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(wx, wy); ctx.stroke();
 
-    if (p.id !== myId){
+    // health bar + name (for non-local)
+    if (!isMe){
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(px - 30, py - 42, 60, 6);
       ctx.fillStyle = '#ff5252';
       ctx.fillRect(px - 30, py - 42, 60 * (p.health/p.maxHealth), 6);
-      ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(p.name, px, py - 48);
+      if (p.armor > 0){
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(px - 30, py - 48, 60, 4);
+        ctx.fillStyle = '#29b6f6';
+        ctx.fillRect(px - 30, py - 48, 60 * (p.armor/100), 4);
+      }
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.name, px, py - 52);
     }
   }
 
@@ -1094,14 +1516,15 @@ function render(){
     ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.stroke();
 
     if (z.state === 'waiting' && z.nextRadius < z.radius){
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
       ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.arc(z.nextX, z.nextY, z.nextRadius, 0, Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
     }
   }
 
-  // Effects
+  // Effects (bullet trails)
   for (let i = effects.length-1; i >= 0; i--){
     const e = effects[i];
     e.t -= 16;
@@ -1113,7 +1536,7 @@ function render(){
     ctx.globalAlpha = 1;
   }
 
-  // Damage texts
+  // Damage numbers
   for (let i = damageTexts.length-1; i >= 0; i--){
     const d = damageTexts[i];
     d.t -= 16;
@@ -1133,16 +1556,26 @@ function render(){
 
 function updateHUD(me){
   if (!me) return;
-  $('hpFill').style.width = Math.max(0, me.health/me.maxHealth)*100 + '%';
-  $('armorFill').style.width = Math.max(0, me.armor/100)*100 + '%';
-  $('hpTxt').textContent = Math.ceil(me.health) + ' HP';
-  $('armorTxt').textContent = me.armor > 0 ? Math.ceil(me.armor) + ' ARMOR' : '';
-  const w = WEAPONS[me.weapon];
-  if (w){
-    $('wname').textContent = w.name.toUpperCase();
-    $('mag').textContent = me.ammo;
-    $('reserve').textContent = '/ ' + me.reserve;
+
+  // Normal HUD only if alive
+  if (me.alive){
+    $('hpFill').style.width = Math.max(0, me.health/me.maxHealth)*100 + '%';
+    $('armorFill').style.width = Math.max(0, me.armor/100)*100 + '%';
+    $('hpTxt').textContent = Math.ceil(me.health) + ' HP';
+    $('armorTxt').textContent = me.armor > 0 ? Math.ceil(me.armor) + ' ARMOR' : '';
+    const w = WEAPONS[me.weapon];
+    if (w){
+      $('wname').textContent = w.name.toUpperCase();
+      $('mag').textContent = me.ammo;
+      $('reserve').textContent = '/ ' + me.reserve;
+    }
+    $('weaponInfo').style.opacity = '1';
+    $('barContainer').style.opacity = '1';
+  } else {
+    $('weaponInfo').style.opacity = '0.35';
+    $('barContainer').style.opacity = '0.35';
   }
+
   const alive = Object.values(state.players).filter(p => p.alive).length;
   $('aliveChip').innerHTML = 'ALIVE <b>' + alive + '</b>';
   const z = state.zone;
@@ -1155,18 +1588,20 @@ function updateHUD(me){
 
 function drawMinimap(){
   const W = 180, H = 180;
-  const scale = W / MAP_W;
+  const scale = W / Math.max(MAP_W, MAP_H);
   mmCtx.clearRect(0, 0, W, H);
   mmCtx.fillStyle = 'rgba(20,40,30,0.9)';
   mmCtx.beginPath(); mmCtx.arc(W/2, H/2, W/2-1, 0, Math.PI*2); mmCtx.fill();
 
+  // obstacles
   mmCtx.fillStyle = 'rgba(90,120,90,0.5)';
   for (const o of obstacles){
     mmCtx.fillRect(o.x*scale, o.y*scale, Math.max(1, o.w*scale), Math.max(1, o.h*scale));
   }
 
   if (state.zone){
-    mmCtx.strokeStyle = '#c47bff'; mmCtx.lineWidth = 2;
+    mmCtx.strokeStyle = '#c47bff';
+    mmCtx.lineWidth = 2;
     mmCtx.beginPath();
     mmCtx.arc(state.zone.x*scale, state.zone.y*scale, state.zone.radius*scale, 0, Math.PI*2);
     mmCtx.stroke();
@@ -1174,7 +1609,7 @@ function drawMinimap(){
 
   for (const p of Object.values(state.players)){
     if (!p.alive) continue;
-    mmCtx.fillStyle = p.id === myId ? '#5fd3ff' : '#ff5252';
+    mmCtx.fillStyle = p.id === myId ? '#5fd3ff' : (p.id === spectateTargetId ? '#ffd166' : '#ff5252');
     mmCtx.beginPath();
     mmCtx.arc(p.x*scale, p.y*scale, p.id === myId ? 3 : 2, 0, Math.PI*2);
     mmCtx.fill();
@@ -1200,6 +1635,7 @@ function gameLoop(now){
   if (gameRunning && state){
     if (state.matchState === 'playing'){
       updatePrediction(dt);
+      updateSpectatorState();
       render();
     } else if (state.matchState === 'ended'){
       render();
@@ -1207,6 +1643,24 @@ function gameLoop(now){
   }
 }
 requestAnimationFrame(gameLoop);
+
+// ============================================================
+// MENU SELECTORS
+// ============================================================
+$('mapSelector').addEventListener('click', (e) => {
+  const btn = e.target.closest('.sel-btn');
+  if (!btn) return;
+  $('mapSelector').querySelectorAll('.sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedMapSize = parseInt(btn.dataset.map);
+});
+$('botSelector').addEventListener('click', (e) => {
+  const btn = e.target.closest('.sel-btn');
+  if (!btn) return;
+  $('botSelector').querySelectorAll('.sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedBots = parseInt(btn.dataset.bots);
+});
 
 // ============================================================
 // MENUS & FLOW
@@ -1237,7 +1691,7 @@ $('btnJoin').addEventListener('click', () => {
   const name = $('nameInput').value.trim();
   if (!name){ $('menuErr').textContent = 'Enter a callsign'; return; }
   const code = prompt('Enter room code (6 characters):');
-  if (!code){ return; }
+  if (!code) return;
   $('menuErr').textContent = '';
   $('menu').classList.add('hidden');
   $('lobby').classList.remove('hidden');
@@ -1288,6 +1742,10 @@ $('roomCode').addEventListener('click', () => {
   }
 });
 
+$('spectateBar').addEventListener('click', () => {
+  if (isSpectating) cycleSpectateTarget();
+});
+
 function updateLobbyUI(){
   if (!state) return;
   const list = $('playerList');
@@ -1310,9 +1768,12 @@ function updateLobbyUI(){
 
 function enterGame(){
   gameRunning = true;
+  isSpectating = false;
+  spectateTargetId = null;
   $('lobby').classList.add('hidden');
   $('menu').classList.add('hidden');
   $('results').classList.add('hidden');
+  $('spectateBar').classList.add('hidden');
   $('hud').classList.remove('hidden');
   const me = getMe();
   if (me){
@@ -1328,6 +1789,9 @@ function enterGame(){
 
 function showResults(winnerName){
   gameRunning = false;
+  isSpectating = false;
+  spectateTargetId = null;
+  $('spectateBar').classList.add('hidden');
   const me = getMe();
   const victory = me && me.name === winnerName;
   $('resTitle').textContent = victory ? 'VICTORY' : 'ELIMINATED';
@@ -1337,6 +1801,10 @@ function showResults(winnerName){
   if (victory) sfx.win(); else sfx.death();
 }
 
+$('nameInput').focus();
+</script>
+</body>
+</html>
 $('nameInput').focus();
 </script>
 </body>
