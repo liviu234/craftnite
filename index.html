@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<title>CRAFTNITE Royale — P2P Online Battle Royale</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#06080f;
+    font-family:"Segoe UI",system-ui,sans-serif;color:#e7eefc}
+  canvas#game{display:block;position:fixed;inset:0;cursor:crosshair}
+  .hidden{display:none!important}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:14px;padding:24px;z-index:100;
+    background:radial-gradient(circle at 50% 30%,#14213b 0%,#05070d 100%)}
+  h1.logo{font-size:clamp(36px,6vw,68px);font-weight:900;letter-spacing:8px;
+    background:linear-gradient(180deg,#7ef7c8,#39c7ff,#a86bff);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{font-size:12px;letter-spacing:6px;color:#7d93b3;margin-top:-6px}
+  input[type=text]{font:inherit;padding:12px 16px;border-radius:10px;width:min(360px,90vw);
+    background:#0f1a2c;border:2px solid rgba(120,200,255,.25);color:#dff0ff;text-align:center}
+  input[type=text]:focus{outline:none;border-color:#5fd3ff}
+  .menu-buttons{display:flex;flex-direction:column;gap:10px;width:min(360px,90vw);margin-top:6px}
+  button{font:inherit;font-size:15px;font-weight:700;letter-spacing:1px;padding:14px 20px;
+    border-radius:10px;border:2px solid rgba(120,200,255,.25);color:#dff0ff;cursor:pointer;
+    background:linear-gradient(180deg,rgba(40,70,110,.85),rgba(20,32,52,.9));
+    text-transform:uppercase;transition:.15s}
+  button:hover{border-color:#5fd3ff;transform:translateY(-1px)}
+  button.primary{background:linear-gradient(180deg,#22c98a,#118a5c);border-color:#42ffc0;color:#04220f}
+  button.primary:hover{background:linear-gradient(180deg,#3ee7a4,#15a86f)}
+  .err{color:#ff8080;font-size:13px;min-height:18px;text-align:center;max-width:420px}
+  .info{font-size:11px;color:#4d637f;letter-spacing:1.5px;text-align:center;max-width:460px;line-height:1.9;margin-top:8px}
+
+  /* lobby */
+  #lobby .panel{background:rgba(16,24,38,.85);border:2px solid rgba(90,140,200,.25);
+    border-radius:14px;padding:22px;width:min(460px,92vw)}
+  #lobby h2{font-size:16px;letter-spacing:4px;color:#9db8d4;margin-bottom:6px}
+  .roomcode{font-family:monospace;font-size:26px;letter-spacing:6px;text-align:center;
+    color:#5fd3ff;padding:12px;background:#050a14;border-radius:8px;
+    border:1px solid #2c415f;margin:10px 0;cursor:pointer}
+  .roomcode:hover{background:#0a1830}
+  .hint{font-size:11px;color:#5f7ea3;text-align:center;letter-spacing:1px}
+  .players{list-style:none;margin-top:12px;max-height:200px;overflow-y:auto}
+  .players li{display:flex;justify-content:space-between;padding:8px 12px;
+    background:#0a1422;border-radius:6px;margin-bottom:6px;font-size:14px}
+  .players li .tag{font-size:10px;letter-spacing:2px;color:#8fb0d0}
+  .status{font-size:13px;color:#7fa8cf;text-align:center;letter-spacing:1px;margin-top:10px}
+
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:50}
+  #minimap{position:absolute;top:14px;right:14px;width:180px;height:180px;
+    border-radius:50%;border:2px solid rgba(140,180,230,.35);
+    background:rgba(6,10,18,.8);box-shadow:0 4px 22px rgba(0,0,0,.5)}
+  #topbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    display:flex;gap:10px}
+  .chip{background:rgba(10,16,26,.8);border:2px solid rgba(140,180,230,.22);
+    padding:7px 14px;border-radius:8px;font-size:13px;font-weight:800;
+    letter-spacing:1px;color:#cfe2f7}
+  .chip b{color:#fff;font-size:15px}
+  .chip.zone{border-color:rgba(180,90,255,.6);color:#d9a7ff}
+  #aliveChip{position:absolute;top:14px;left:14px;background:rgba(10,16,26,.8);
+    padding:7px 14px;border-radius:8px;font-size:13px;font-weight:800;
+    letter-spacing:1px;border:2px solid rgba(140,180,230,.22)}
+  #aliveChip b{color:#5fffc8}
+  #feed{position:absolute;top:60px;left:14px;display:flex;flex-direction:column;
+    gap:5px;font-size:12px;font-weight:700;max-width:320px}
+  #feed div{background:rgba(10,16,26,.75);padding:5px 11px;border-radius:6px;
+    border-left:3px solid #5fd3ff;color:#cfe2f7;animation:slidein .25s ease}
+  @keyframes slidein{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+  #weaponInfo{position:absolute;right:20px;bottom:22px;text-align:right;font-weight:800;
+    text-shadow:0 2px 6px #000}
+  #weaponInfo .wname{font-size:13px;letter-spacing:3px;color:#9db8d4;margin-bottom:4px}
+  #weaponInfo .ammo .mag{font-size:40px;line-height:1}
+  #weaponInfo .ammo .res{font-size:15px;color:#9db8d4;margin-left:6px}
+  #barContainer{position:absolute;left:20px;bottom:22px;width:240px;
+    display:flex;flex-direction:column;gap:6px}
+  .bar{height:16px;border-radius:5px;background:rgba(0,0,0,.6);
+    border:2px solid rgba(255,255,255,.18);position:relative;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;transition:width .12s}
+  .bar>span{position:absolute;inset:0;font-size:10px;font-weight:800;display:flex;
+    align-items:center;justify-content:center;letter-spacing:1px;
+    text-shadow:0 1px 2px #000}
+  #hpFill{background:linear-gradient(180deg,#5dffa0,#1aa85c)}
+  #armorFill{background:linear-gradient(180deg,#7fd4ff,#1f7ad6)}
+  #net{position:absolute;top:14px;right:206px;font-size:11px;color:#7fa8cf;letter-spacing:1px}
+
+  /* results */
+  #results{background:rgba(4,7,12,.92);backdrop-filter:blur(6px)}
+  #resTitle{font-size:clamp(34px,6vw,64px);font-weight:900;letter-spacing:6px}
+  #resSub{font-size:14px;color:#9db8d4;letter-spacing:2px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="menu" class="screen">
+  <h1 class="logo">CRAFTNITE</h1>
+  <div class="sub">ROYALE · P2P ONLINE</div>
+  <input type="text" id="nameInput" placeholder="Your callsign" maxlength="16" />
+  <div class="menu-buttons">
+    <button class="primary" id="btnHost">Host Match</button>
+    <button id="btnJoin">Join with Code</button>
+  </div>
+  <div class="err" id="menuErr"></div>
+  <div class="info">Real peer-to-peer multiplayer via WebRTC · Room codes are 6 characters</div>
+</div>
+
+<div id="lobby" class="screen hidden">
+  <div class="panel">
+    <h2>ROOM CODE</h2>
+    <div class="roomcode" id="roomCode" title="Click to copy">------</div>
+    <div class="hint" id="codeHint">Click to copy — share with friends</div>
+    <ul class="players" id="playerList"></ul>
+    <div class="status" id="lobbyStatus">Starting…</div>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="primary hidden" id="btnStart">Start Match</button>
+    <button id="btnLeave">Leave</button>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="aliveChip">ALIVE <b>0</b></div>
+  <div id="topbar">
+    <div class="chip zone" id="zoneChip">ZONE <b>--</b></div>
+  </div>
+  <div id="net">— ms</div>
+  <div id="feed"></div>
+  <div id="weaponInfo">
+    <div class="wname" id="wname">PISTOL</div>
+    <div class="ammo"><span class="mag" id="mag">12</span><span class="res" id="reserve">/ 120</span></div>
+  </div>
+  <div id="barContainer">
+    <div class="bar"><i id="armorFill" style="width:0%"></i><span id="armorTxt"></span></div>
+    <div class="bar"><i id="hpFill" style="width:100%"></i><span id="hpTxt"></span></div>
+  </div>
+</div>
+
+<div id="results" class="screen hidden">
+  <h2 id="resTitle">VICTORY</h2>
+  <div id="resSub" class="sub"></div>
+  <div class="menu-buttons" style="margin-top:20px">
+    <button class="primary" id="btnAgain">Play Again</button>
+    <button id="btnQuit">Leave Room</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const MAP_W = 3000, MAP_H = 3000;
+const PLAYER_RADIUS = 18;
+const PLAYER_SPEED = 220;
+const TICK_MS = 50;           // server (host) tick = 20Hz
+const INPUT_HZ = 33;          // client input send rate
+const INTERP_DELAY = 100;     // remote players rendered 100ms behind
+const MAX_PLAYERS = 8;
+
+const WEAPONS = {
+  pistol:  { name:'Pistol',  damage:22, fireRate:350,  magSize:12, reload:1200, range:700,  spread:0.03,  pellets:1, color:'#ffd166' },
+  smg:     { name:'SMG',     damage:13, fireRate:90,   magSize:30, reload:1600, range:550,  spread:0.09,  pellets:1, color:'#8bc34a' },
+  ar:      { name:'Rifle',   damage:26, fireRate:140,  magSize:30, reload:2000, range:900,  spread:0.04,  pellets:1, color:'#39c7ff' },
+  shotgun: { name:'Shotgun', damage:15, fireRate:750,  magSize:6,  reload:2200, range:400,  spread:0.16,  pellets:6, color:'#ff9f45' },
+  sniper:  { name:'Sniper',  damage:85, fireRate:1200, magSize:5,  reload:2800, range:1500, spread:0.005, pellets:1, color:'#b06bff' }
+};
+const ZONE_PHASES = [
+  { wait:15000, shrink:12000, factor:0.62, dmg:1  },
+  { wait:12000, shrink:10000, factor:0.55, dmg:2  },
+  { wait:10000, shrink:9000,  factor:0.50, dmg:4  },
+  { wait:8000,  shrink:7000,  factor:0.40, dmg:7  },
+  { wait:6000,  shrink:6000,  factor:0.30, dmg:10 }
+];
+const ZONE_START_RADIUS = 1400;
+
+// ============================================================
+// UTILITIES
+// ============================================================
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const rand = (a,b) => a + Math.random()*(b-a);
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+
+function rayCircle(ox, oy, dx, dy, cx, cy, r){
+  const ex = ox-cx, ey = oy-cy;
+  const b = ex*dx + ey*dy;
+  const c = ex*ex + ey*ey - r*r;
+  const disc = b*b - c;
+  if (disc < 0) return null;
+  const t = -b - Math.sqrt(disc);
+  return t >= 0 ? t : null;
+}
+function rayAABB(ox, oy, dx, dy, x, y, w, h){
+  let tmin = 0, tmax = Infinity;
+  if (Math.abs(dx) < 1e-8) { if (ox < x || ox > x+w) return null; }
+  else { let t1 = (x-ox)/dx, t2 = (x+w-ox)/dx; if (t1 > t2) [t1,t2]=[t2,t1];
+         tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+         if (tmin > tmax) return null; }
+  if (Math.abs(dy) < 1e-8) { if (oy < y || oy > y+h) return null; }
+  else { let t1 = (y-oy)/dy, t2 = (y+h-oy)/dy; if (t1 > t2) [t1,t2]=[t2,t1];
+         tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+         if (tmin > tmax) return null; }
+  return tmin >= 0 ? tmin : null;
+}
+
+// ============================================================
+// MAP / OBSTACLES
+// ============================================================
+const obstacles = [];
+
+function generateMap(){
+  obstacles.length = 0;
+  for (let i = 0; i < 22; i++){
+    const w = rand(120, 240), h = rand(120, 240);
+    obstacles.push({ x: rand(150, MAP_W-w-150), y: rand(150, MAP_H-h-150),
+                     w, h, kind:'building' });
+  }
+  for (let i = 0; i < 40; i++){
+    const r = rand(25, 50);
+    obstacles.push({ x: rand(80, MAP_W-80), y: rand(80, MAP_H-80),
+                     w: r*2, h: r*2, kind:'rock' });
+  }
+  for (let i = 0; i < 140; i++){
+    const r = rand(22, 38);
+    obstacles.push({ x: rand(50, MAP_W-50), y: rand(50, MAP_H-50),
+                     w: r*2, h: r*2, kind:'tree' });
+  }
+}
+function collides(x, y, r){
+  r = r || PLAYER_RADIUS;
+  for (const o of obstacles){
+    const cx = clamp(x, o.x, o.x+o.w);
+    const cy = clamp(y, o.y, o.y+o.h);
+    if ((cx-x)**2 + (cy-y)**2 < r*r) return true;
+  }
+  return false;
+}
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+let state = null;
+let isHost = false;
+let myId = null;
+let myName = '';
+let peer = null;
+let connections = new Map();   // host: peerId -> DataConnection
+let hostConnection = null;     // client: connection to host
+let gameRunning = false;
+
+let inputSeq = 0;
+let localPredX = 0, localPredY = 0;
+const remoteHistories = new Map();
+const effects = [];            // muzzle flashes
+const damageTexts = [];
+
+// Host-only
+let hostLoop = null;
+let lastZoneDmg = 0;
+let nextLootId = 1;
+let inputs = new Map();
+
+// Rendering
+let cameraX = 0, cameraY = 0;
+
+const canvas = $('game');
+const ctx = canvas.getContext('2d');
+const mm = $('minimap');
+const mmCtx = mm.getContext('2d');
+
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// ============================================================
+// AUDIO (minimal)
+// ============================================================
+let audioCtx = null;
+function initAudio(){
+  if (audioCtx) return;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){}
+}
+function beep(freq, dur, vol, type){
+  if (!audioCtx) return;
+  vol = vol || 0.08; type = type || 'square';
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + dur);
+}
+const sfx = {
+  shot:    () => beep(320, 0.06, 0.09, 'square'),
+  hit:     () => beep(760, 0.04, 0.09, 'square'),
+  pickup:  () => { beep(620, 0.06); setTimeout(()=>beep(880, 0.08), 55); },
+  death:   () => { [440,349,262,196].forEach((f,i)=>setTimeout(()=>beep(f,0.15,0.09,'sawtooth'), i*90)); },
+  win:     () => { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.18,0.11,'triangle'), i*110)); }
+};
+
+// ============================================================
+// INITIAL STATE (HOST)
+// ============================================================
+function createInitialState(){
+  return {
+    tick: 0,
+    matchState: 'waiting',
+    winner: '',
+    winnerId: '',
+    players: {},
+    loot: {},
+    zone: {
+      x: MAP_W/2, y: MAP_H/2, radius: ZONE_START_RADIUS,
+      nextX: MAP_W/2, nextY: MAP_H/2, nextRadius: ZONE_START_RADIUS,
+      phase: 0, timer: ZONE_PHASES[0].wait, state: 'waiting'
+    }
+  };
+}
+function makePlayer(id, name, isBot){
+  return {
+    id, name, isBot: !!isBot,
+    x: rand(300, MAP_W-300), y: rand(300, MAP_H-300),
+    rotation: 0,
+    health: 100, maxHealth: 100, armor: 0,
+    weapon: 'pistol',
+    ammo: 12, reserve: 120,
+    isReloading: false, reloadEnd: 0,
+    lastFireTime: 0,
+    alive: true, kills: 0,
+    inputSeq: 0
+  };
+}
+
+// ============================================================
+// HOST SIMULATION
+// ============================================================
+function hostStart(){
+  state.matchState = 'playing';
+  state.winner = '';
+  state.tick = 0;
+  state.zone = {
+    x: MAP_W/2, y: MAP_H/2, radius: ZONE_START_RADIUS,
+    nextX: MAP_W/2, nextY: MAP_H/2, nextRadius: ZONE_START_RADIUS,
+    phase: 0, timer: ZONE_PHASES[0].wait, state: 'waiting'
+  };
+  lastZoneDmg = 0;
+
+  for (const p of Object.values(state.players)){
+    p.health = p.maxHealth;
+    p.armor = 0;
+    p.weapon = 'pistol';
+    p.ammo = 12; p.reserve = 120;
+    p.isReloading = false; p.reloadEnd = 0;
+    p.kills = 0;
+    p.alive = true;
+    p.x = rand(300, MAP_W-300);
+    p.y = rand(300, MAP_H-300);
+    p.lastFireTime = 0;
+  }
+
+  state.loot = {};
+  for (let i = 0; i < 80; i++) hostSpawnLoot();
+
+  // Fill with bots up to 4 total
+  let botCount = 0;
+  for (const p of Object.values(state.players)) if (p.isBot) botCount++;
+  for (let i = botCount; i < 4; i++){
+    const bid = 'BOT_' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    state.players[bid] = makePlayer(bid, 'Bot ' + bid.slice(-3), true);
+  }
+
+  broadcastState();
+  broadcastNotice('Match started!');
+
+  if (hostLoop) clearInterval(hostLoop);
+  hostLoop = setInterval(hostTick, TICK_MS);
+}
+
+function hostTick(){
+  if (state.matchState !== 'playing') return;
+  const now = Date.now();
+  state.tick++;
+
+  for (const p of Object.values(state.players)){
+    if (!p.alive) continue;
+    if (p.isBot){ hostUpdateBot(p, now); continue; }
+    const inp = inputs.get(p.id);
+    if (inp) hostApplyInput(p, inp, TICK_MS);
+    if (p.isReloading && now >= p.reloadEnd) hostFinishReload(p);
+  }
+
+  hostUpdateZone(TICK_MS);
+
+  if (now - lastZoneDmg > 1000){
+    const phase = ZONE_PHASES[Math.min(state.zone.phase, ZONE_PHASES.length-1)];
+    for (const p of Object.values(state.players)){
+      if (!p.alive) continue;
+      const d = Math.hypot(p.x - state.zone.x, p.y - state.zone.y);
+      if (d > state.zone.radius) hostDamage(p, phase.dmg, null);
+    }
+    lastZoneDmg = now;
+  }
+
+  broadcastState();
+
+  const alive = Object.values(state.players).filter(p => p.alive);
+  if (alive.length <= 1){
+    state.matchState = 'ended';
+    state.winner = alive[0]?.name || 'Nobody';
+    state.winnerId = alive[0]?.id || '';
+    broadcastMsg({ type:'matchEnd', winnerId: state.winnerId, winnerName: state.winner });
+    broadcastState();
+    if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
+  }
+}
+
+function hostApplyInput(p, inp, dt){
+  let dx = 0, dy = 0;
+  if (inp.up) dy -= 1;
+  if (inp.down) dy += 1;
+  if (inp.left) dx -= 1;
+  if (inp.right) dx += 1;
+  const len = Math.hypot(dx, dy);
+  if (len > 0){ dx /= len; dy /= len; }
+  const step = PLAYER_SPEED * dt / 1000;
+  const nx = p.x + dx * step;
+  const ny = p.y + dy * step;
+  if (!collides(nx, p.y)) p.x = clamp(nx, 40, MAP_W-40);
+  if (!collides(p.x, ny)) p.y = clamp(ny, 40, MAP_H-40);
+  p.rotation = inp.rotation;
+  p.inputSeq = inp.seq || 0;
+}
+
+function hostUpdateZone(dt){
+  const z = state.zone;
+  z.timer -= dt;
+  const phase = ZONE_PHASES[Math.min(z.phase, ZONE_PHASES.length-1)];
+
+  if (z.state === 'waiting' && z.timer <= 0){
+    const shift = z.radius * (1 - phase.factor) * 0.6;
+    const a = Math.random() * Math.PI * 2;
+    z.nextX = z.x + Math.cos(a) * shift;
+    z.nextY = z.y + Math.sin(a) * shift;
+    z.nextRadius = z.radius * phase.factor;
+    z.state = 'shrinking';
+    z.timer = phase.shrink;
+    broadcastNotice('Safe zone is shrinking!');
+  } else if (z.state === 'shrinking'){
+    const progress = 1 - Math.max(0, z.timer) / phase.shrink;
+    const t = Math.min(0.06, (1 - progress) * 0.1 + 0.015);
+    z.x = lerp(z.x, z.nextX, t);
+    z.y = lerp(z.y, z.nextY, t);
+    z.radius = lerp(z.radius, z.nextRadius, t);
+    if (z.timer <= 0){
+      z.x = z.nextX; z.y = z.nextY; z.radius = z.nextRadius;
+      z.phase = Math.min(z.phase + 1, ZONE_PHASES.length-1);
+      z.state = 'waiting';
+      z.timer = ZONE_PHASES[z.phase].wait;
+    }
+  }
+}
+
+function hostFire(id, rotation){
+  const p = state.players[id];
+  if (!p || !p.alive || p.isReloading) return;
+  const w = WEAPONS[p.weapon];
+  if (!w) return;
+  if (p.ammo <= 0){ hostReload(id); return; }
+  const now = Date.now();
+  if (now - p.lastFireTime < w.fireRate) return;
+  p.lastFireTime = now;
+  p.ammo--;
+
+  broadcastMsg({ type:'fireEvent', id: p.id, x:p.x, y:p.y,
+                rotation, weapon:p.weapon });
+
+  const victims = new Set();
+  for (let i = 0; i < w.pellets; i++){
+    const angle = rotation + (Math.random()-0.5)*w.spread*2;
+    const victimId = hostRaycastPlayer(p.x, p.y, angle, w.range, id);
+    if (victimId) victims.add(victimId);
+  }
+  for (const vid of victims){
+    const victim = state.players[vid];
+    if (victim) hostDamage(victim, w.damage, id);
+  }
+  if (p.ammo <= 0) hostReload(id);
+}
+
+function hostRaycastPlayer(x, y, angle, range, excludeId){
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  let bestT = range, bestId = null;
+  let obsT = range;
+  for (const o of obstacles){
+    const t = rayAABB(x, y, dx, dy, o.x, o.y, o.w, o.h);
+    if (t !== null && t < obsT) obsT = t;
+  }
+  for (const p of Object.values(state.players)){
+    if (p.id === excludeId || !p.alive) continue;
+    const t = rayCircle(x, y, dx, dy, p.x, p.y, PLAYER_RADIUS);
+    if (t !== null && t < bestT){ bestT = t; bestId = p.id; }
+  }
+  if (obsT < bestT) return null;
+  return bestId;
+}
+
+function hostDamage(p, dmg, attackerId){
+  if (!p.alive) return;
+  let rem = dmg;
+  if (p.armor > 0){
+    const absorbed = Math.min(p.armor, rem);
+    p.armor -= absorbed; rem -= absorbed;
+  }
+  p.health -= rem;
+  broadcastMsg({ type:'hit', victimId:p.id, damage: dmg });
+  if (p.health <= 0){
+    p.health = 0;
+    p.alive = false;
+    if (attackerId && state.players[attackerId]){
+      state.players[attackerId].kills++;
+    }
+    hostSpawnLoot(p.x, p.y, 'weapon', p.weapon !== 'pistol' ? p.weapon : 'ar');
+    broadcastMsg({ type:'eliminated', victimId:p.id, victimName:p.name,
+                   killerId: attackerId || '' });
+    broadcastNotice(p.name + ' was eliminated');
+  }
+}
+
+function hostReload(id){
+  const p = state.players[id];
+  if (!p || p.isReloading || !p.alive) return;
+  const w = WEAPONS[p.weapon];
+  if (!w || p.ammo >= w.magSize || p.reserve <= 0) return;
+  p.isReloading = true;
+  p.reloadEnd = Date.now() + w.reload;
+}
+
+function hostFinishReload(p){
+  const w = WEAPONS[p.weapon];
+  const need = w.magSize - p.ammo;
+  const take = Math.min(need, p.reserve);
+  p.ammo += take;
+  p.reserve -= take;
+  p.isReloading = false;
+  p.reloadEnd = 0;
+}
+
+function hostSwitchWeapon(id, weapon){
+  const p = state.players[id];
+  if (!p || !p.alive || !WEAPONS[weapon]) return;
+  p.weapon = weapon;
+  p.ammo = Math.min(WEAPONS[weapon].magSize, p.reserve);
+  p.reserve -= p.ammo;
+}
+
+function hostSpawnLoot(x, y, type, weapon){
+  const id = 'L' + (nextLootId++);
+  if (x === undefined) x = rand(150, MAP_W-150);
+  if (y === undefined) y = rand(150, MAP_H-150);
+  if (!type){
+    const r = Math.random();
+    if (r < 0.5) type = 'weapon';
+    else if (r < 0.75) type = 'ammo';
+    else if (r < 0.9) type = 'health';
+    else type = 'armor';
+  }
+  if (type === 'weapon' && !weapon){
+    const opts = ['smg','ar','shotgun','sniper'];
+    weapon = opts[Math.floor(Math.random()*opts.length)];
+  }
+  state.loot[id] = { id, type, weapon: weapon || '', x, y };
+}
+
+function hostPickup(playerId, lootId){
+  const p = state.players[playerId];
+  const l = state.loot[lootId];
+  if (!p || !l || !p.alive) return;
+  if (Math.hypot(p.x - l.x, p.y - l.y) > 60) return;
+  delete state.loot[lootId];
+  if (l.type === 'weapon'){
+    p.weapon = l.weapon;
+    p.ammo = WEAPONS[l.weapon].magSize;
+    p.reserve = Math.max(p.reserve, 60);
+  } else if (l.type === 'ammo'){
+    p.reserve += 40;
+  } else if (l.type === 'health'){
+    p.health = Math.min(p.maxHealth, p.health + 40);
+  } else if (l.type === 'armor'){
+    p.armor = Math.min(100, p.armor + 40);
+  }
+  broadcastNotice(p.name + ' picked up ' + l.type);
+}
+
+function hostUpdateBot(p, now){
+  if (p.isReloading && now >= p.reloadEnd) hostFinishReload(p);
+
+  const z = state.zone;
+  const zDist = Math.hypot(p.x - z.x, p.y - z.y);
+  if (zDist > z.radius * 0.85){
+    const ang = Math.atan2(z.y - p.y, z.x - p.x);
+    const step = PLAYER_SPEED * 0.85 * TICK_MS / 1000;
+    const nx = p.x + Math.cos(ang)*step;
+    const ny = p.y + Math.sin(ang)*step;
+    if (!collides(nx, p.y)) p.x = clamp(nx, 40, MAP_W-40);
+    if (!collides(p.x, ny)) p.y = clamp(ny, 40, MAP_H-40);
+    p.rotation = ang;
+    return;
+  }
+
+  let nearest = null, nd = 500;
+  for (const o of Object.values(state.players)){
+    if (o.id === p.id || !o.alive) continue;
+    const d = Math.hypot(o.x-p.x, o.y-p.y);
+    if (d < nd){ nd = d; nearest = o; }
+  }
+
+  if (nearest){
+    const ang = Math.atan2(nearest.y - p.y, nearest.x - p.x);
+    p.rotation = ang;
+    const clear = hostHasLOS(p.x, p.y, nearest.x, nearest.y);
+    if (clear && nd < 450 && !p.isReloading) hostFire(p.id, ang);
+    const strafe = ang + Math.PI/2 * Math.sin(now/700);
+    const step = PLAYER_SPEED * 0.5 * TICK_MS / 1000;
+    const nx = p.x + Math.cos(strafe)*step;
+    const ny = p.y + Math.sin(strafe)*step;
+    if (!collides(nx, p.y)) p.x = clamp(nx, 40, MAP_W-40);
+    if (!collides(p.x, ny)) p.y = clamp(ny, 40, MAP_H-40);
+  } else {
+    const wander = Math.sin(now/2000 + p.x*0.01 + p.y*0.01);
+    const step = PLAYER_SPEED * 0.4 * TICK_MS / 1000;
+    const nx = p.x + Math.cos(wander)*step;
+    const ny = p.y + Math.sin(wander)*step;
+    if (!collides(nx, p.y)) p.x = clamp(nx, 40, MAP_W-40);
+    if (!collides(p.x, ny)) p.y = clamp(ny, 40, MAP_H-40);
+  }
+}
+
+function hostHasLOS(x0, y0, x1, y1){
+  const dx = x1-x0, dy = y1-y0;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return true;
+  const nx = dx/len, ny = dy/len;
+  for (const o of obstacles){
+    const t = rayAABB(x0, y0, nx, ny, o.x, o.y, o.w, o.h);
+    if (t !== null && t < len) return false;
+  }
+  return true;
+}
+
+// ============================================================
+// NETWORK
+// ============================================================
+function makeCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+function broadcastMsg(msg){
+  if (!isHost) return;
+  for (const conn of connections.values()){
+    try { conn.send(msg); } catch(e){}
+  }
+}
+function broadcastState(){
+  if (!isHost) return;
+  broadcastMsg({ type:'state', state });
+}
+function broadcastNotice(text){
+  if (!isHost) return;
+  addFeed(text);
+  broadcastMsg({ type:'notice', text });
+}
+function sendToHost(msg){
+  if (isHost || !hostConnection) return;
+  try { hostConnection.send(msg); } catch(e){}
+}
+
+function hostRoom(name, onReady, onError){
+  isHost = true;
+  myName = name;
+  state = createInitialState();
+  generateMap();
+  const code = makeCode();
+
+  peer = new Peer(code, { debug: 0 });
+
+  peer.on('open', () => {
+    myId = code;
+    state.players[myId] = makePlayer(myId, name);
+    onReady(code);
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id'){
+      peer.destroy();
+      setTimeout(() => hostRoom(name, onReady, onError), 200);
+    } else {
+      onError(err.message || 'Connection error');
+    }
+  });
+
+  peer.on('connection', (conn) => {
+    conn.on('open', () => {
+      if (Object.keys(state.players).length >= MAX_PLAYERS){
+        conn.send({ type:'error', message:'Room is full' });
+        conn.close();
+        return;
+      }
+      const peerName = (conn.metadata && conn.metadata.name) || 'Player';
+      const pid = conn.peer;
+      state.players[pid] = makePlayer(pid, peerName);
+      connections.set(pid, conn);
+
+      conn.send({ type:'welcome', playerId: pid, mapData: { obstacles } });
+      conn.send({ type:'state', state });
+
+      broadcastNotice(peerName + ' joined');
+      broadcastState();
+      updateLobbyUI();
+    });
+
+    conn.on('data', (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      const pid = conn.peer;
+      const p = state.players[pid];
+      if (!p) return;
+      switch (msg.type){
+        case 'input': if (msg.input) inputs.set(pid, msg.input); break;
+        case 'fire': if (state.matchState === 'playing') hostFire(pid, msg.rotation); break;
+        case 'reload': if (state.matchState === 'playing') hostReload(pid); break;
+        case 'switchWeapon': if (state.matchState === 'playing') hostSwitchWeapon(pid, msg.weapon); break;
+        case 'pickup': if (state.matchState === 'playing') hostPickup(pid, msg.lootId); break;
+        case 'requestRematch':
+          if (state.matchState === 'ended'){
+            hostStart();
+            enterGame();
+          }
+          break;
+      }
+    });
+
+    conn.on('close', () => {
+      const p = state.players[pid];
+      if (p){
+        broadcastNotice(p.name + ' disconnected');
+        delete state.players[pid];
+        connections.delete(pid);
+        inputs.delete(pid);
+        broadcastState();
+        updateLobbyUI();
+      }
+      if (state.matchState === 'playing'){
+        const alive = Object.values(state.players).filter(x => x.alive);
+        if (alive.length <= 1){
+          state.matchState = 'ended';
+          state.winner = alive[0]?.name || 'Nobody';
+          state.winnerId = alive[0]?.id || '';
+          broadcastMsg({ type:'matchEnd', winnerId: state.winnerId, winnerName: state.winner });
+          broadcastState();
+          if (hostLoop){ clearInterval(hostLoop); hostLoop = null; }
+        }
+      }
+    });
+  });
+}
+
+function joinRoom(code, name, onReady, onError){
+  isHost = false;
+  myName = name;
+  state = { players: {}, loot: {}, zone: null, matchState: 'waiting', tick: 0 };
+
+  peer = new Peer({ debug: 0 });
+
+  peer.on('open', () => {
+    const conn = peer.connect(code.toUpperCase(), { metadata: { name } });
+    hostConnection = conn;
+
+    conn.on('open', () => onReady());
+
+    conn.on('data', (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      switch (msg.type){
+        case 'welcome':
+          myId = msg.playerId;
+          if (msg.mapData && msg.mapData.obstacles){
+            obstacles.length = 0;
+            obstacles.push(...msg.mapData.obstacles);
+          }
+          break;
+        case 'state':
+          state = msg.state;
+          for (const pid of Object.keys(state.players)){
+            if (pid === myId) continue;
+            let hist = remoteHistories.get(pid);
+            if (!hist){ hist = []; remoteHistories.set(pid, hist); }
+            const p = state.players[pid];
+            hist.push({ x:p.x, y:p.y, t: Date.now() });
+            if (hist.length > 20) hist.shift();
+          }
+          if (state.matchState === 'playing' && !gameRunning) enterGame();
+          break;
+        case 'fireEvent':
+          if (msg.id === myId) break;
+          effects.push({
+            x0: msg.x, y0: msg.y,
+            x1: msg.x + Math.cos(msg.rotation) * WEAPONS[msg.weapon].range,
+            y1: msg.y + Math.sin(msg.rotation) * WEAPONS[msg.weapon].range,
+            t: 100, maxT: 100, color: WEAPONS[msg.weapon].color
+          });
+          break;
+        case 'hit':
+          const v = state.players[msg.victimId];
+          if (v) damageTexts.push({ x:v.x, y:v.y-40, text:'-'+Math.round(msg.damage), t:800, maxT:800 });
+          if (msg.victimId === myId) sfx.hit();
+          break;
+        case 'eliminated':
+          addFeed('☠ ' + msg.victimName + ' eliminated');
+          if (msg.victimId === myId) sfx.death();
+          break;
+        case 'matchEnd':
+          state.matchState = 'ended';
+          state.winner = msg.winnerName;
+          showResults(msg.winnerName);
+          break;
+        case 'notice':
+          addFeed(msg.text);
+          break;
+        case 'error':
+          onError(msg.message || 'Error');
+          break;
+      }
+    });
+
+    conn.on('close', () => {
+      if (gameRunning){
+        gameRunning = false;
+        $('hud').classList.add('hidden');
+        $('results').classList.add('hidden');
+        $('menu').classList.remove('hidden');
+        $('menuErr').textContent = 'Disconnected from host';
+        state = null;
+        isHost = false;
+      }
+    });
+
+    conn.on('error', (err) => onError('Connection failed: ' + err));
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') onError('Room code not found or host offline.');
+    else onError(err.message || 'Connection error');
+  });
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyR') sendToHost({ type:'reload' });
+  if (e.code === 'Digit1') sendToHost({ type:'switchWeapon', weapon:'pistol' });
+  if (e.code === 'Digit2') sendToHost({ type:'switchWeapon', weapon:'smg' });
+  if (e.code === 'Digit3') sendToHost({ type:'switchWeapon', weapon:'ar' });
+  if (e.code === 'Digit4') sendToHost({ type:'switchWeapon', weapon:'shotgun' });
+  if (e.code === 'Digit5') sendToHost({ type:'switchWeapon', weapon:'sniper' });
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+let mouseX = 0, mouseY = 0, mouseDown = false;
+canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0){ mouseDown = true; initAudio(); }
+});
+window.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+function getMouseWorld(){ return { x: cameraX + mouseX, y: cameraY + mouseY }; }
+function getMe(){ return state && state.players ? state.players[myId] : null; }
+function computeRotation(){
+  const me = getMe();
+  if (!me) return 0;
+  const m = getMouseWorld();
+  return Math.atan2(m.y - me.y, m.x - me.x);
+}
+
+// Input send loop
+setInterval(() => {
+  if (!gameRunning || !state || state.matchState !== 'playing') return;
+  const me = getMe();
+  if (!me || !me.alive) return;
+  const rotation = computeRotation();
+  const input = {
+    seq: ++inputSeq,
+    up: !!keys['KeyW'], down: !!keys['KeyS'],
+    left: !!keys['KeyA'], right: !!keys['KeyD'],
+    rotation
+  };
+  if (isHost) inputs.set(myId, input);
+  else sendToHost({ type:'input', input });
+}, 1000 / INPUT_HZ);
+
+// Fire loop
+let lastSentFire = 0;
+setInterval(() => {
+  if (!gameRunning || !state || state.matchState !== 'playing') return;
+  const me = getMe();
+  if (!me || !me.alive || me.isReloading) return;
+  if (!mouseDown) return;
+  const w = WEAPONS[me.weapon];
+  const now = Date.now();
+  if (now - lastSentFire < w.fireRate) return;
+  lastSentFire = now;
+  const rotation = computeRotation();
+  if (isHost) hostFire(myId, rotation);
+  else sendToHost({ type:'fire', rotation });
+  sfx.shot();
+}, 20);
+
+// Auto-pickup loop
+setInterval(() => {
+  if (!gameRunning || !state || state.matchState !== 'playing') return;
+  const me = getMe();
+  if (!me || !me.alive) return;
+  for (const l of Object.values(state.loot)){
+    if (Math.hypot(l.x - me.x, l.y - me.y) < 40){
+      sendToHost({ type:'pickup', lootId: l.id });
+      if (isHost) hostPickup(myId, l.id);
+      sfx.pickup();
+    }
+  }
+}, 200);
+
+// ============================================================
+// PREDICTION
+// ============================================================
+function updatePrediction(dt){
+  const me = getMe();
+  if (!me) return;
+  if (localPredX === 0 && localPredY === 0){ localPredX = me.x; localPredY = me.y; }
+
+  let dx = 0, dy = 0;
+  if (keys['KeyW']) dy -= 1;
+  if (keys['KeyS']) dy += 1;
+  if (keys['KeyA']) dx -= 1;
+  if (keys['KeyD']) dx += 1;
+  const len = Math.hypot(dx, dy);
+  if (len > 0){ dx /= len; dy /= len; }
+  const step = PLAYER_SPEED * dt / 1000;
+  const nx = localPredX + dx * step;
+  const ny = localPredY + dy * step;
+  if (!collides(nx, localPredY)) localPredX = clamp(nx, 40, MAP_W-40);
+  if (!collides(localPredX, ny)) localPredY = clamp(ny, 40, MAP_H-40);
+
+  const err = Math.hypot(me.x - localPredX, me.y - localPredY);
+  if (err > 150){ localPredX = me.x; localPredY = me.y; }
+  else { localPredX = lerp(localPredX, me.x, 0.2); localPredY = lerp(localPredY, me.y, 0.2); }
+}
+
+// ============================================================
+// INTERPOLATION
+// ============================================================
+function interpolatePosition(pid){
+  const p = state.players[pid];
+  if (!p) return { x:0, y:0 };
+  const hist = remoteHistories.get(pid);
+  if (!hist || hist.length < 2) return { x: p.x, y: p.y };
+  const renderTime = Date.now() - INTERP_DELAY;
+  for (let i = hist.length - 1; i > 0; i--){
+    if (hist[i-1].t <= renderTime){
+      const a = hist[i-1], b = hist[i];
+      const t = clamp((renderTime - a.t) / Math.max(1, b.t - a.t), 0, 1);
+      return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+    }
+  }
+  return { x: hist[0].x, y: hist[0].y };
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+let lastFrameTime = performance.now();
+
+function render(){
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#1a2f1e';
+  ctx.fillRect(0, 0, W, H);
+
+  if (!state) return;
+  const me = getMe();
+
+  if (me){
+    const px = (me.id === myId) ? localPredX : me.x;
+    const py = (me.id === myId) ? localPredY : me.y;
+    cameraX = lerp(cameraX, px - W/2, 0.15);
+    cameraY = lerp(cameraY, py - H/2, 0.15);
+  }
+
+  ctx.save();
+  ctx.translate(-cameraX, -cameraY);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(60,100,65,0.22)';
+  ctx.lineWidth = 1;
+  const gs = 200;
+  for (let x = Math.floor(cameraX/gs)*gs; x < cameraX+W+gs; x += gs){
+    ctx.beginPath(); ctx.moveTo(x, cameraY); ctx.lineTo(x, cameraY+H); ctx.stroke();
+  }
+  for (let y = Math.floor(cameraY/gs)*gs; y < cameraY+H+gs; y += gs){
+    ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX+W, y); ctx.stroke();
+  }
+
+  // Obstacles
+  for (const o of obstacles){
+    if (o.x + o.w < cameraX || o.x > cameraX + W) continue;
+    if (o.y + o.h < cameraY || o.y > cameraY + H) continue;
+    if (o.kind === 'building'){
+      ctx.fillStyle = '#6b4a2b';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+      ctx.strokeRect(o.x, o.y, o.w, o.h);
+    } else if (o.kind === 'rock'){
+      ctx.fillStyle = '#5a5f66';
+      ctx.beginPath(); ctx.arc(o.x+o.w/2, o.y+o.h/2, o.w/2, 0, Math.PI*2); ctx.fill();
+    } else if (o.kind === 'tree'){
+      ctx.fillStyle = '#2a6b32';
+      ctx.beginPath(); ctx.arc(o.x+o.w/2, o.y+o.h/2, o.w/2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Loot
+  for (const l of Object.values(state.loot)){
+    if (l.x < cameraX - 50 || l.x > cameraX + W + 50) continue;
+    if (l.y < cameraY - 50 || l.y > cameraY + H + 50) continue;
+    let color = '#ffd166';
+    if (l.type === 'weapon') color = '#ff9f45';
+    else if (l.type === 'ammo') color = '#cddc39';
+    else if (l.type === 'health') color = '#4caf50';
+    else if (l.type === 'armor') color = '#29b6f6';
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(l.x, l.y, 14, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // Players
+  for (const p of Object.values(state.players)){
+    if (!p.alive) continue;
+    let px, py;
+    if (p.id === myId){ px = localPredX; py = localPredY; }
+    else { const interp = interpolatePosition(p.id); px = interp.x; py = interp.y; }
+
+    const color = p.id === myId ? '#5fd3ff' : (p.isBot ? '#ff8a65' : '#ffd166');
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+
+    const wx = px + Math.cos(p.rotation) * 26;
+    const wy = py + Math.sin(p.rotation) * 26;
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(wx, wy); ctx.stroke();
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(wx, wy); ctx.stroke();
+
+    if (p.id !== myId){
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(px - 30, py - 42, 60, 6);
+      ctx.fillStyle = '#ff5252';
+      ctx.fillRect(px - 30, py - 42, 60 * (p.health/p.maxHealth), 6);
+      ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(p.name, px, py - 48);
+    }
+  }
+
+  // Zone
+  const z = state.zone;
+  if (z){
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cameraX, cameraY, W, H);
+    ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2, true);
+    ctx.fillStyle = 'rgba(166,77,255,0.16)';
+    ctx.fill('evenodd');
+    ctx.restore();
+
+    ctx.strokeStyle = '#c47bff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.stroke();
+
+    if (z.state === 'waiting' && z.nextRadius < z.radius){
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath(); ctx.arc(z.nextX, z.nextY, z.nextRadius, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Effects
+  for (let i = effects.length-1; i >= 0; i--){
+    const e = effects[i];
+    e.t -= 16;
+    if (e.t <= 0){ effects.splice(i, 1); continue; }
+    ctx.strokeStyle = e.color;
+    ctx.globalAlpha = e.t / e.maxT;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(e.x0, e.y0); ctx.lineTo(e.x1, e.y1); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Damage texts
+  for (let i = damageTexts.length-1; i >= 0; i--){
+    const d = damageTexts[i];
+    d.t -= 16;
+    d.y -= 0.5;
+    if (d.t <= 0){ damageTexts.splice(i, 1); continue; }
+    ctx.fillStyle = 'rgba(255,82,82,' + (d.t/d.maxT) + ')';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.text, d.x, d.y);
+  }
+
+  ctx.restore();
+
+  updateHUD(me);
+  drawMinimap();
+}
+
+function updateHUD(me){
+  if (!me) return;
+  $('hpFill').style.width = Math.max(0, me.health/me.maxHealth)*100 + '%';
+  $('armorFill').style.width = Math.max(0, me.armor/100)*100 + '%';
+  $('hpTxt').textContent = Math.ceil(me.health) + ' HP';
+  $('armorTxt').textContent = me.armor > 0 ? Math.ceil(me.armor) + ' ARMOR' : '';
+  const w = WEAPONS[me.weapon];
+  if (w){
+    $('wname').textContent = w.name.toUpperCase();
+    $('mag').textContent = me.ammo;
+    $('reserve').textContent = '/ ' + me.reserve;
+  }
+  const alive = Object.values(state.players).filter(p => p.alive).length;
+  $('aliveChip').innerHTML = 'ALIVE <b>' + alive + '</b>';
+  const z = state.zone;
+  if (z){
+    const t = Math.ceil(z.timer/1000);
+    $('zoneChip').innerHTML = (z.state === 'waiting' ? 'SHRINK IN <b>' : 'SHRINKING <b>') + t + 's</b>';
+  }
+  $('net').textContent = (peer && peer.open ? 'READY' : 'CONNECTING…');
+}
+
+function drawMinimap(){
+  const W = 180, H = 180;
+  const scale = W / MAP_W;
+  mmCtx.clearRect(0, 0, W, H);
+  mmCtx.fillStyle = 'rgba(20,40,30,0.9)';
+  mmCtx.beginPath(); mmCtx.arc(W/2, H/2, W/2-1, 0, Math.PI*2); mmCtx.fill();
+
+  mmCtx.fillStyle = 'rgba(90,120,90,0.5)';
+  for (const o of obstacles){
+    mmCtx.fillRect(o.x*scale, o.y*scale, Math.max(1, o.w*scale), Math.max(1, o.h*scale));
+  }
+
+  if (state.zone){
+    mmCtx.strokeStyle = '#c47bff'; mmCtx.lineWidth = 2;
+    mmCtx.beginPath();
+    mmCtx.arc(state.zone.x*scale, state.zone.y*scale, state.zone.radius*scale, 0, Math.PI*2);
+    mmCtx.stroke();
+  }
+
+  for (const p of Object.values(state.players)){
+    if (!p.alive) continue;
+    mmCtx.fillStyle = p.id === myId ? '#5fd3ff' : '#ff5252';
+    mmCtx.beginPath();
+    mmCtx.arc(p.x*scale, p.y*scale, p.id === myId ? 3 : 2, 0, Math.PI*2);
+    mmCtx.fill();
+  }
+}
+
+function addFeed(text){
+  const d = document.createElement('div');
+  d.textContent = text;
+  $('feed').appendChild(d);
+  setTimeout(() => d.remove(), 4000);
+  while ($('feed').children.length > 5) $('feed').firstChild.remove();
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function gameLoop(now){
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min(50, now - lastFrameTime);
+  lastFrameTime = now;
+
+  if (gameRunning && state){
+    if (state.matchState === 'playing'){
+      updatePrediction(dt);
+      render();
+    } else if (state.matchState === 'ended'){
+      render();
+    }
+  }
+}
+requestAnimationFrame(gameLoop);
+
+// ============================================================
+// MENUS & FLOW
+// ============================================================
+$('btnHost').addEventListener('click', () => {
+  const name = $('nameInput').value.trim();
+  if (!name){ $('menuErr').textContent = 'Enter a callsign'; return; }
+  $('menuErr').textContent = '';
+  $('menu').classList.add('hidden');
+  $('lobby').classList.remove('hidden');
+  $('lobbyStatus').textContent = 'Starting host…';
+  $('roomCode').textContent = '……';
+  hostRoom(name,
+    (code) => {
+      $('roomCode').textContent = code;
+      $('lobbyStatus').textContent = 'Share the code — waiting for players…';
+      updateLobbyUI();
+    },
+    (err) => {
+      $('menuErr').textContent = err;
+      $('lobby').classList.add('hidden');
+      $('menu').classList.remove('hidden');
+    }
+  );
+});
+
+$('btnJoin').addEventListener('click', () => {
+  const name = $('nameInput').value.trim();
+  if (!name){ $('menuErr').textContent = 'Enter a callsign'; return; }
+  const code = prompt('Enter room code (6 characters):');
+  if (!code){ return; }
+  $('menuErr').textContent = '';
+  $('menu').classList.add('hidden');
+  $('lobby').classList.remove('hidden');
+  $('roomCode').textContent = code.toUpperCase();
+  $('lobbyStatus').textContent = 'Connecting…';
+  $('codeHint').textContent = 'Waiting for host…';
+  joinRoom(code.toUpperCase(), name,
+    () => {
+      $('lobbyStatus').textContent = 'Connected — waiting for host to start';
+      updateLobbyUI();
+    },
+    (err) => {
+      $('menuErr').textContent = err;
+      $('lobby').classList.add('hidden');
+      $('menu').classList.remove('hidden');
+    }
+  );
+});
+
+$('btnStart').addEventListener('click', () => {
+  if (!isHost) return;
+  hostStart();
+  enterGame();
+});
+
+$('btnLeave').addEventListener('click', () => location.reload());
+$('btnQuit').addEventListener('click', () => location.reload());
+$('btnAgain').addEventListener('click', () => {
+  $('results').classList.add('hidden');
+  if (isHost){
+    hostStart();
+    enterGame();
+  } else {
+    sendToHost({ type:'requestRematch' });
+    $('resTitle').textContent = 'WAITING';
+    $('resTitle').style.color = '#9db8d4';
+    $('resSub').textContent = 'Waiting for host to restart…';
+    $('results').classList.remove('hidden');
+  }
+});
+
+$('roomCode').addEventListener('click', () => {
+  const code = $('roomCode').textContent;
+  if (code.length === 6 && navigator.clipboard){
+    navigator.clipboard.writeText(code);
+    $('codeHint').textContent = 'Copied!';
+    setTimeout(() => { $('codeHint').textContent = 'Click to copy — share with friends'; }, 1200);
+  }
+});
+
+function updateLobbyUI(){
+  if (!state) return;
+  const list = $('playerList');
+  list.innerHTML = '';
+  for (const p of Object.values(state.players)){
+    const li = document.createElement('li');
+    li.innerHTML = '<span>' + p.name + '</span>' +
+      (p.isBot ? '<span class="tag">BOT</span>' : '<span class="tag" style="color:#5fffc8">LIVE</span>');
+    list.appendChild(li);
+  }
+  const count = Object.keys(state.players).length;
+  if (isHost){
+    $('lobbyStatus').textContent = count + ' player' + (count!==1?'s':'') + ' ready';
+    $('btnStart').classList.remove('hidden');
+  } else {
+    $('lobbyStatus').textContent = count + ' player' + (count!==1?'s':'') + ' in lobby';
+    $('btnStart').classList.add('hidden');
+  }
+}
+
+function enterGame(){
+  gameRunning = true;
+  $('lobby').classList.add('hidden');
+  $('menu').classList.add('hidden');
+  $('results').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  const me = getMe();
+  if (me){
+    localPredX = me.x; localPredY = me.y;
+    cameraX = me.x - canvas.width/2;
+    cameraY = me.y - canvas.height/2;
+  } else {
+    cameraX = MAP_W/2 - canvas.width/2;
+    cameraY = MAP_H/2 - canvas.height/2;
+  }
+  initAudio();
+}
+
+function showResults(winnerName){
+  gameRunning = false;
+  const me = getMe();
+  const victory = me && me.name === winnerName;
+  $('resTitle').textContent = victory ? 'VICTORY' : 'ELIMINATED';
+  $('resTitle').style.color = victory ? '#5fffc8' : '#ff6b6b';
+  $('resSub').textContent = victory ? 'You are the last survivor!' : 'Winner: ' + winnerName;
+  $('results').classList.remove('hidden');
+  if (victory) sfx.win(); else sfx.death();
+}
+
+$('nameInput').focus();
+</script>
+</body>
+</html>
