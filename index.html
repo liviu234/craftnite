@@ -2518,7 +2518,7 @@ function physics(e, dt) {
   if (e.kind === 'bot' && (e.onGround || e.vy > -14) && !e.para && !e.dive && !e.flying && !e.inWater && (e.wishX || e.wishZ)) {
     const l = Math.hypot(e.wishX, e.wishZ) || 1, ax = Math.floor(e.x + e.wishX / l * 1.0), az = Math.floor(e.z + e.wishZ / l * 1.0), y0 = Math.floor(e.y);
     let safe = false; for (let k = 0; k <= 5; k++) { const id = w.getBlock(ax, y0 - 1 - k, az); if (B_SOLID[id] || B_LIQ[id]) { safe = id !== BK.lava; break; } }
-    if (!safe) { e.wishX = e.wishZ = 0; e.cliffT = 0.4; }
+    if (!safe) { e.wishX = e.wishZ = 0; e.cliffT = 0.4; if (e.brain) { e.brain.path = null; e.brain.pathT = 0; if (e.brain.goal && e.brain.goal.type !== 'drop') { e.brain.goal = null; e.brain.goalT = 0; } e.brain.cliffHits = (e.brain.cliffHits || 0) + 1; if (e.brain.cliffHits > 6) { e.brain.cliffHits = 0; e.brain.invest = null; e.brain.enemy = null; } } }
   }
   // horizontal control
   const tgtX = e.wishX * e.speed * sMul * (e.inWater ? 0.55 : 1) * (e.climb ? 0.6 : 1), tgtZ = e.wishZ * e.speed * sMul * (e.inWater ? 0.55 : 1) * (e.climb ? 0.6 : 1);
@@ -2678,11 +2678,111 @@ function updateDrops(dt) {
     }
   }
 }
-function removeDrop(i) { const d = G.drops[i]; if (d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material) o.material.dispose(); }); } G.drops.splice(i, 1); }
-function dropMeshFor(stack) {
+function removeDrop(i) { const d = G.drops[i]; if (d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); } G.drops.splice(i, 1); }
+
+/* ---------- detailed dropped-gun models ---------- */
+const _dgMat = {};
+function dgMat(c, em) { const k = c + ':' + (em || 0); if (!_dgMat[k]) { _dgMat[k] = new THREE.MeshLambertMaterial({ color: c, emissive: em || 0 }); _dgMat[k].userData.shared = true; } return _dgMat[k]; }
+function dropGunParts(id) {
+  const S = 0x4b505c, L = 0x8b93a3, D = 0x23252d, K = 0x111111, W = 0x8a5a2e, WD = 0x6b4420, T = 0x35d0c0, GL = 0x66ccff, ST = 0xeeeeee, BW = 0xa8743f;
+  // [sizeX(length), sizeY, sizeZ, color, x, y, z, rotZ, rotY, emissive]
+  switch (id) {
+    case 'smg': return [
+      [0.46, 0.14, 0.12, S, 0, 0, 0], [0.22, 0.1, 0.105, L, 0.22, -0.01, 0], [0.2, 0.05, 0.05, D, 0.42, 0.02, 0], [0.07, 0.075, 0.075, K, 0.55, 0.02, 0],
+      [0.26, 0.04, 0.04, D, -0.35, 0.03, 0], [0.04, 0.13, 0.07, D, -0.48, 0, 0], [0.07, 0.17, 0.08, D, -0.12, -0.15, 0, 0.25], [0.08, 0.24, 0.09, D, 0.07, -0.18, 0],
+      [0.14, 0.02, 0.07, K, -0.02, -0.085, 0], [0.02, 0.04, 0.02, K, 0.32, 0.095, 0], [0.04, 0.04, 0.04, K, -0.12, 0.095, 0], [0.1, 0.02, 0.125, L, 0.0, 0.04, 0]];
+    case 'ar': return [
+      [0.55, 0.14, 0.12, S, 0, 0, 0], [0.3, 0.1, 0.11, L, 0.42, -0.005, 0], [0.34, 0.045, 0.045, D, 0.74, 0.02, 0], [0.07, 0.07, 0.07, K, 0.93, 0.02, 0],
+      [0.28, 0.13, 0.1, D, -0.4, -0.01, 0], [0.05, 0.19, 0.1, K, -0.55, -0.02, 0], [0.08, 0.18, 0.08, D, -0.12, -0.15, 0, 0.3], [0.08, 0.27, 0.09, D, 0.12, -0.2, 0, 0.2],
+      [0.14, 0.02, 0.07, K, 0.0, -0.09, 0], [0.34, 0.03, 0.05, K, 0.05, 0.095, 0], [0.03, 0.08, 0.03, K, 0.62, 0.09, 0], [0.04, 0.06, 0.04, K, -0.2, 0.1, 0], [0.12, 0.02, 0.125, L, -0.02, 0.04, 0]];
+    case 'burst': return [
+      [0.55, 0.14, 0.12, S, 0, 0, 0], [0.4, 0.025, 0.125, T, 0.04, 0.045, 0, 0, 0, T], [0.3, 0.1, 0.11, D, 0.42, -0.005, 0], [0.38, 0.04, 0.04, L, 0.76, 0.045, 0], [0.38, 0.04, 0.04, L, 0.76, -0.01, 0.045], [0.38, 0.04, 0.04, L, 0.76, -0.01, -0.045],
+      [0.07, 0.09, 0.09, K, 0.97, 0.01, 0], [0.28, 0.13, 0.1, D, -0.4, -0.01, 0], [0.05, 0.19, 0.1, K, -0.55, -0.02, 0], [0.08, 0.18, 0.08, D, -0.12, -0.15, 0, 0.3], [0.08, 0.24, 0.09, D, 0.12, -0.19, 0],
+      [0.14, 0.02, 0.07, K, 0.0, -0.09, 0], [0.1, 0.06, 0.06, K, -0.02, 0.1, 0], [0.03, 0.03, 0.04, T, 0.04, 0.105, 0, 0, 0, T]];
+    case 'shotgun_t': return [
+      [0.34, 0.14, 0.12, D, -0.05, 0, 0], [0.62, 0.06, 0.06, S, 0.47, 0.03, 0], [0.5, 0.05, 0.05, L, 0.42, -0.04, 0], [0.2, 0.08, 0.105, W, 0.34, -0.07, 0],
+      [0.3, 0.12, 0.09, W, -0.34, -0.02, 0], [0.05, 0.17, 0.1, D, -0.51, -0.03, 0], [0.07, 0.15, 0.07, D, -0.15, -0.13, 0, 0.3], [0.12, 0.02, 0.07, K, -0.06, -0.085, 0],
+      [0.02, 0.04, 0.02, L, 0.77, 0.07, 0], [0.04, 0.075, 0.075, K, 0.79, 0.03, 0], [0.16, 0.02, 0.07, K, -0.02, 0.075, 0]];
+    case 'shotgun_h': return [
+      [0.2, 0.15, 0.13, S, 0, 0, 0], [0.74, 0.06, 0.055, D, 0.42, 0.03, 0.035], [0.74, 0.06, 0.055, D, 0.42, 0.03, -0.035], [0.74, 0.02, 0.04, L, 0.42, 0.075, 0],
+      [0.22, 0.07, 0.13, WD, 0.28, -0.02, 0], [0.38, 0.13, 0.1, W, -0.29, -0.03, 0, 0.05], [0.05, 0.18, 0.1, D, -0.49, -0.07, 0, 0.1], [0.12, 0.02, 0.07, K, 0.02, -0.085, 0],
+      [0.02, 0.04, 0.02, L, 0.78, 0.075, 0], [0.1, 0.03, 0.14, L, 0.07, 0.0, 0]];
+    case 'hunting': return [
+      [0.82, 0.05, 0.05, D, 0.45, 0.03, 0], [0.55, 0.11, 0.1, W, -0.1, -0.03, 0], [0.22, 0.15, 0.09, WD, -0.42, -0.05, 0, 0.12], [0.2, 0.08, 0.1, WD, 0.2, -0.045, 0],
+      [0.03, 0.03, 0.09, L, -0.02, 0.07, 0.06], [0.22, 0.06, 0.06, K, 0.05, 0.12, 0], [0.04, 0.05, 0.04, S, 0.0, 0.09, 0], [0.04, 0.05, 0.04, S, 0.12, 0.09, 0], [0.025, 0.07, 0.07, GL, 0.17, 0.12, 0, 0, 0, GL],
+      [0.08, 0.05, 0.08, S, 0.05, -0.085, 0], [0.12, 0.02, 0.07, K, -0.02, -0.095, 0], [0.04, 0.06, 0.06, K, 0.87, 0.03, 0]];
+    case 'sniper': return [
+      [1.0, 0.05, 0.05, K, 0.58, 0.03, 0], [0.12, 0.085, 0.085, D, 1.1, 0.03, 0], [0.45, 0.13, 0.11, S, -0.05, 0, 0], [0.4, 0.11, 0.09, D, -0.4, -0.02, 0],
+      [0.2, 0.05, 0.09, L, -0.4, 0.07, 0], [0.05, 0.17, 0.1, D, -0.62, -0.03, 0], [0.42, 0.08, 0.08, K, 0.0, 0.14, 0], [0.12, 0.1, 0.1, D, 0.22, 0.14, 0], [0.1, 0.09, 0.09, D, -0.2, 0.14, 0],
+      [0.03, 0.09, 0.09, GL, 0.285, 0.14, 0, 0, 0, GL], [0.04, 0.05, 0.05, S, -0.1, 0.09, 0], [0.04, 0.05, 0.05, S, 0.12, 0.09, 0],
+      [0.03, 0.16, 0.03, L, 0.68, -0.07, 0.05, 0.35], [0.03, 0.16, 0.03, L, 0.68, -0.07, -0.05, 0.35], [0.08, 0.13, 0.08, D, 0.0, -0.12, 0], [0.07, 0.15, 0.07, D, -0.2, -0.13, 0, 0.3]];
+    case 'bow': return [
+      [0.06, 0.06, 0.18, WD, 0, 0, 0], [0.05, 0.035, 0.21, BW, 0.03, 0, 0.18, 0, 0.29], [0.05, 0.035, 0.21, BW, 0.115, 0, 0.37, 0, 0.55], [0.05, 0.035, 0.21, BW, 0.03, 0, -0.18, 0, -0.29], [0.05, 0.035, 0.21, BW, 0.115, 0, -0.37, 0, -0.55],
+      [0.012, 0.012, 0.94, ST, 0.17, 0, 0], [0.5, 0.02, 0.02, 0xc9a66b, 0.17, 0.02, 0], [0.06, 0.04, 0.04, 0xdddddd, 0.43, 0.02, 0]];
+    case 'crossbow': return [
+      [0.62, 0.09, 0.09, W, 0, 0, 0], [0.04, 0.05, 0.74, D, 0.27, 0.02, 0], [0.12, 0.04, 0.04, D, 0.26, 0.02, 0.4, 0, 0.5], [0.12, 0.04, 0.04, D, 0.26, 0.02, -0.4, 0, -0.5],
+      [0.012, 0.012, 0.66, ST, 0.12, 0.04, 0], [0.5, 0.03, 0.03, L, 0.1, 0.06, 0], [0.12, 0.03, 0.03, 0xcccccc, 0.4, 0.06, 0], [0.04, 0.1, 0.04, K, -0.1, -0.09, 0], [0.1, 0.08, 0.06, D, -0.3, -0.02, 0],
+      [0.03, 0.04, 0.12, L, 0.42, 0.0, 0]];
+  }
+  return null;
+}
+function dropGunModel(stack) {
+  const parts = dropGunParts(stack.id); if (!parts) return null;
+  const inner = new THREE.Group(), rc = new THREE.Color(RARITY[stack.r || 0].color).getHex();
+  for (const p of parts) {
+    const m = new THREE.Mesh(boxGeo(p[0], p[1], p[2]), dgMat(p[3], p[9]));
+    m.position.set(p[4], p[5], p[6]); if (p[7]) m.rotation.z = p[7]; if (p[8]) m.rotation.y = p[8]; inner.add(m);
+  }
+  const strip = new THREE.Mesh(boxGeo(0.12, 0.03, 0.135), dgMat(rc, rc)); strip.position.set(-0.2, 0.045, 0); inner.add(strip);
+  const strip2 = new THREE.Mesh(boxGeo(0.03, 0.12, 0.13), dgMat(rc, rc)); strip2.position.set(0.18, 0, 0); inner.add(strip2);
+  inner.scale.set(1.15, 1.15, 1.15); return inner;
+}
+
+/* ---------- detailed dropped-ammo models ---------- */
+const _cylCache = {};
+function cylGeo(rt, rb, h) { const k = rt + ',' + rb + ',' + h; return _cylCache[k] || (_cylCache[k] = new THREE.CylinderGeometry(rt, rb, h, 8)); }
+function dropAmmoModel(stack) {
+  const id = stack.id, g = new THREE.Group();
+  const add = (geo, c, x, y, z, rx, ry, rz, em) => { const m = new THREE.Mesh(geo, dgMat(c, em)); m.position.set(x, y, z); if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz; g.add(m); return m; };
+  const box = (w, h, d, c, x, y, z, em) => add(boxGeo(w, h, d), c, x, y, z, 0, 0, 0, em);
+  const BRASS = 0xd4a84a, COP = 0xc87a3a, SIL = 0xcfd5de;
+  const crate = (c, label) => { const dk = new THREE.Color(c).multiplyScalar(0.55).getHex(); box(0.44, 0.1, 0.28, dk, 0, 0.05, 0); box(0.46, 0.025, 0.3, c, 0, 0.1, 0); box(0.2, 0.012, 0.12, label, 0, 0.106, 0.13 * 0 + 0.0); };
+  const rounds = (r, h, tipH, tipCol, cols, rows, sp, baseY, caseCol) => {
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const x = (i - (cols - 1) / 2) * sp, z = (j - (rows - 1) / 2) * sp;
+      add(cylGeo(r, r, h), caseCol || BRASS, x, baseY + h / 2, z);
+      add(cylGeo(0, r * 0.95, tipH), tipCol, x, baseY + h + tipH / 2, z);
+    }
+  };
+  if (id === 'ammo_l') { crate(0xffd45a, 0xfff3c0); rounds(0.02, 0.06, 0.035, COP, 5, 2, 0.075, 0.1); add(cylGeo(0.02, 0.02, 0.06), BRASS, 0.3, 0.03, 0.12, 0, 0, Math.PI / 2); add(cylGeo(0, 0.019, 0.035), COP, 0.35, 0.03, 0.12, 0, 0, -Math.PI / 2); }
+  else if (id === 'ammo_m') { crate(0x8ee06a, 0xe6ffd8); rounds(0.026, 0.1, 0.06, SIL, 4, 2, 0.095, 0.1); add(cylGeo(0.026, 0.026, 0.1), BRASS, 0.3, 0.026, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0, 0.025, 0.06), SIL, 0.38, 0.026, 0.1, 0, 0, -Math.PI / 2); }
+  else if (id === 'ammo_h') { crate(0xff6a5a, 0xffd0c8); rounds(0.036, 0.14, 0.09, 0x2a2d35, 3, 2, 0.12, 0.1, 0xb0b6c2); add(cylGeo(0.036, 0.036, 0.14), 0xb0b6c2, 0.32, 0.036, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0, 0.035, 0.09), 0x2a2d35, 0.43, 0.036, 0.1, 0, 0, -Math.PI / 2); }
+  else if (id === 'shells') {
+    crate(0xff9a3a, 0xffe2c0);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { const x = (i - 1.5) * 0.1, z = (j - 0.5) * 0.1; add(cylGeo(0.038, 0.038, 0.1), 0xd23a2a, x, 0.1 + 0.05, z); add(cylGeo(0.04, 0.04, 0.035), BRASS, x, 0.1 + 0.0175, z); add(cylGeo(0.03, 0.038, 0.012), 0xa82c20, x, 0.1 + 0.106, z); }
+    add(cylGeo(0.038, 0.038, 0.1), 0xd23a2a, 0.34, 0.038, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0.04, 0.04, 0.035), BRASS, 0.3, 0.038, 0.1, 0, 0, Math.PI / 2);
+  }
+  else if (id === 'arrow' || id === 'bolt') {
+    const arrow = id === 'arrow', L = arrow ? 0.7 : 0.46, shaft = arrow ? 0xd9c7a0 : 0x9fb4c8, tip = arrow ? 0xcfd5de : 0xe0e6ee, vane = arrow ? 0xe04a3a : 0x667788;
+    const offs = [[0, 0.06, 0], [0.0, 0.06, 0.07], [0, 0.06, -0.07], [0, 0.12, 0.035], [0, 0.12, -0.035]];
+    offs.forEach((o, k) => {
+      const dx = (k % 2 ? 0.03 : -0.02);
+      add(cylGeo(0.012, 0.012, L), shaft, dx, o[1], o[2], 0, 0, Math.PI / 2);
+      add(cylGeo(0, 0.03, 0.09), tip, dx + L / 2 + 0.045, o[1], o[2], 0, 0, -Math.PI / 2);
+      for (const a of [0, 1]) box(arrow ? 0.14 : 0.1, 0.05, 0.008, vane, dx - L / 2 + 0.07, o[1], o[2], 0).rotation.x = a ? Math.PI / 2 : 0;
+    });
+    box(0.035, 0.2, 0.2, 0x6b4420, -0.05, 0.09, 0); // tie band
+    if (!arrow) box(0.06, 0.2, 0.2, 0x3a4350, 0.1, 0.09, 0);
+  }
+  else return null;
+  g.scale.set(1.15, 1.15, 1.15); return g;
+}
+function dropMeshFor(stack, detail) {
   const g = new THREE.Group(), it = ITEM[stack.id], col = new THREE.Color(isGearType(it.type) ? RARITY[stack.r || 0].color : it.color);
   const gear = isGearType(it.type);
-  const m = new THREE.Mesh(boxGeo(gear ? 0.62 : 0.34, gear ? 0.2 : 0.34, gear ? 0.2 : 0.34), new THREE.MeshLambertMaterial({ color: col, emissive: col.clone().multiplyScalar(0.35) }));
+  let m = detail && it.type === 'gun' ? dropGunModel(stack) : (detail && it.type === 'ammo' ? dropAmmoModel(stack) : null);
+  if (!m) m = new THREE.Mesh(boxGeo(gear ? 0.62 : 0.34, gear ? 0.2 : 0.34, gear ? 0.2 : 0.34), new THREE.MeshLambertMaterial({ color: col, emissive: col.clone().multiplyScalar(0.35) }));
+  else { const pad = new THREE.Mesh(boxGeo(it.type === 'ammo' ? 0.7 : 1.0, 0.02, it.type === 'ammo' ? 0.45 : 0.5), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, fog: false, depthWrite: false })); pad.position.y = 0.12; g.add(pad); g.userData.detail = true; }
   m.position.y = 0.3; g.add(m);
   if (gear || (stack.r || 0) > 0 || it.type === 'gadget') { const bc = new THREE.Color(gear ? RARITY[stack.r || 0].color : it.color); const beam = new THREE.Mesh(boxGeo(0.12, 3.2, 0.12), new THREE.MeshBasicMaterial({ color: bc, transparent: true, opacity: 0.28, fog: false, depthWrite: false })); beam.position.y = 1.7; g.add(beam); }
   g.userData.m = m; return g;
@@ -2691,8 +2791,10 @@ function updateDropMeshes() {
   const P = G.P; if (!P) return;
   for (const d of G.drops) {
     const near = Math.abs(d.x - P.x) < 52 && Math.abs(d.z - P.z) < 52 && Math.abs(d.y - P.y) < 70;
-    if (near && !d.mesh) { d.mesh = dropMeshFor(d.stack); G.rend.scene.add(d.mesh); }
-    else if (!near && d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material) o.material.dispose(); }); d.mesh = null; }
+    const hd = Math.hypot(d.x - P.x, d.z - P.z), wantDetail = d.stack && (ITEM[d.stack.id].type === 'gun' || ITEM[d.stack.id].type === 'ammo') && hd < (d.mesh && d.mesh.userData.detail ? 38 : 30);
+    if (d.mesh && near && !!d.mesh.userData.detail !== wantDetail) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
+    if (near && !d.mesh) { d.mesh = dropMeshFor(d.stack, wantDetail); G.rend.scene.add(d.mesh); }
+    else if (!near && d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
     if (d.mesh) { d.mesh.position.set(d.x, d.y - 0.1, d.z); d.mesh.userData.m.rotation.y = G.t * 2 + d.id; d.mesh.userData.m.position.y = 0.3 + Math.sin(G.t * 2.5 + d.id) * 0.06; }
   }
 }
@@ -3215,14 +3317,11 @@ function steer(b, tx, tz, mul, face) {
   return d;
 }
 function followPath(b, goalX, goalZ, mul, dt) {
-  const br = b.brain; br.pathT -= dt; br.pathFail = false;
+  const br = b.brain; br.pathT -= dt;
   const gd = Math.hypot(goalX - b.x, goalZ - b.z);
   if (gd < 1.2) { b.wishX = b.wishZ = 0; return gd; }
   if ((br.pathT <= 0 || !br.path || Math.hypot(br.pgx - goalX, br.pgz - goalZ) > 6) && gd > 3) {
     br.path = findPath(b.x, b.z, goalX, goalZ, gd > 60 ? 3200 : 1800) || []; br.pgx = goalX; br.pgz = goalZ; br.pathT = 3 + Math.random() * 2; br.pi = 0;
-    // goal unreachable: the path stops well short of it and makes no real progress
-    const lp = br.path.length ? br.path[br.path.length - 1] : [b.x, b.z], ed = Math.hypot(lp[0] - goalX, lp[1] - goalZ);
-    br.pathFail = gd > 8 && ed > 5 && (br.path.length < 3 || ed > gd - 4);
   }
   let tx = goalX, tz = goalZ;
   if (br.path && br.path.length && gd > 3) {
@@ -3241,40 +3340,16 @@ function stuckCheck(b, dt) {
   if (br.lastChk <= 0) {
     br.lastChk = 0.5;
     const mv = Math.hypot(b.x - (br.lx || 0), b.z - (br.lz || 0)); br.lx = b.x; br.lz = b.z;
-    if (moving && mv < 0.25) br.stuckT += 0.5; else { br.stuckT = Math.max(0, br.stuckT - 0.5); if (mv >= 1) br.stuckN = 0; }
-    if (br.stuckT >= 1) { br.pathT = 0; if (b.onGround) jumpBody(b); }
+    if (moving && mv < 0.25) br.stuckT += 0.5; else br.stuckT = Math.max(0, br.stuckT - 0.5);
+    if (br.stuckT >= 1) { if (b.onGround) jumpBody(b); }
     if (br.stuckT >= 2.5) {
       // dig through whatever is ahead (never bedrock / vault seals)
       const f = aimDirOf(b.yaw, 0), bx = Math.floor(b.x + f[0] * 0.9), bz = Math.floor(b.z + f[2] * 0.9), by = Math.floor(b.y);
       for (const h of [1, 0, 2]) { const id = G.world.getBlock(bx, by + h, bz); if (id !== 0 && B_SOLID[id] && !BD[id].unbreak) { breakBlock(bx, by + h, bz, b, { quiet: false }); break; } }
       br.stuckT = 1.2; if (Math.random() < 0.3) br.path = null;
-      br.stuckN = (br.stuckN || 0) + 1; if (br.stuckN >= 3) botGiveUp(b, br);
     }
+    if (br.stuckT >= 5) { br.strafe = (Math.random() < 0.5 ? -1 : 1); br.stuckT = 0; br.path = null; }
   }
-}
-
-/* ---------- bot unstick helpers ---------- */
-function botGoalKey(g) {
-  if (!g) return null;
-  if (g.type === 'chest') return 'c' + g.c.x + ',' + g.c.y + ',' + g.c.z;
-  if (g.type === 'drop') return 'd' + Math.round(g.d.x / 4) + ',' + Math.round(g.d.z / 4);
-  if (g.type === 'poi') return 'p' + Math.round(g.x / 10) + ',' + Math.round(g.z / 10);
-  return null;
-}
-function botIsBad(br, g) { const k = botGoalKey(g); return !!(k && br.bad && br.bad.some(e => e.k === k && e.t > G.t)); }
-function botMarkBad(br, g) { const k = botGoalKey(g); if (!k) return; br.bad = (br.bad || []).filter(e => e.t > G.t); br.bad.push({ k, t: G.t + 40 }); }
-function botWander(b, br) {
-  for (let i = 0; i < 16; i++) {
-    const a = Math.random() * TAU, r = rnd(10, 24), x = b.x + Math.cos(a) * r, z = b.z + Math.sin(a) * r, y = walkable(Math.floor(x), Math.floor(z));
-    if (y < 0 || Math.abs(y - b.y) > 4) continue; if (G.zone && !inZone(x, z, 4)) continue;
-    br.wander = { x, z, t: G.t + 7 }; return;
-  }
-  br.wander = null;
-}
-function botGiveUp(b, br) {
-  botMarkBad(br, br.goal); br.goal = null; br.goalT = 0; br.invest = null; br.path = null; br.pathT = 0; br.mineTarget = null;
-  br.stuckT = 0; br.stuckN = 0; br.idleT = 0; br.noGatherT = G.t + 6; botWander(b, br);
-  if (b.onGround) jumpBody(b);
 }
 
 /* ---------- bots ---------- */
@@ -3337,8 +3412,8 @@ function botUpdate(b, dt) {
   br.buildCd -= dt; br.coverT -= dt; br.strafeT -= dt; br.react -= dt; br.fleeT -= dt; br.goalT -= dt; br.jumpT -= dt;
   // ---- parachute phase ----
   if (b.para) {
-    b.speed = 8.5; const g = br.dropGoal; if (g) { const d = steer(b, g.x, g.z, 1, true); if (d < 6 && b.y > g.y + 25) { b.vy = Math.min(b.vy, -26); b.para = false; b.dive = true; } }
-    if (b.dive) { b.para = false; } else if (b.y < g.y + 18 || b.onGround) { b.para = true; }
+    b.speed = 8.5; const g = br.dropGoal || (br.dropGoal = { x: G.world.W / 2, z: G.world.D / 2, y: SEA + 6 }); if (g) { const d = steer(b, g.x, g.z, 1, true); if (d < 6 && b.y > g.y + 25) { b.vy = Math.min(b.vy, -26); b.para = false; b.dive = true; } }
+    if (b.dive) { b.para = false; } else { b.para = true; }
     if (b.onGround) { b.para = false; b.dive = false; b.speed = 4.4; }
     if (groundBelow(b.x, b.y, b.z, 6) < 2.5) { b.para = false; }
     b.vy = Math.max(b.vy, -20);
@@ -3377,8 +3452,6 @@ function botUpdate(b, dt) {
   else if (br.invest && G.t < br.invest.t) state = 'search';
   else state = 'loot';
   if (state === 'fight' && b.hp + b.sh < 38 && vis && br.fleeT <= 0) { br.fleeT = 2.5 + Math.random() * 2; state = 'flee'; }
-  if ((state === 'loot' || state === 'search') && br.wander && G.t < br.wander.t) state = 'wander';
-  if (state !== 'loot') { br.mining = false; br.mineT = 0; }
   br.state = state;
   // ---- weapon choice ----
   const dEn = enemy && br.ls ? Math.hypot(br.ls.x - b.x, br.ls.z - b.z) : 30;
@@ -3388,19 +3461,12 @@ function botUpdate(b, dt) {
   if (state === 'fight') botFight(b, br, D, enemy, vis, dEn, dt);
   else if (state === 'flee') botFlee(b, br, D, enemy, dt);
   else if (state === 'zone') { const Z = G.zone; followPath(b, Z.cx + rnd(-1, 1), Z.cz + rnd(-1, 1), 1, dt); b.sprint = true; b.speed = 5.2; if (b.inWater) b.jumpHeld = true; if (G.zone.shrinking || outside) { /* if far and bridging needed */ } tryTowardZoneBuild(b, br, D, dt); }
-  else if (state === 'wander') { const wd = followPath(b, br.wander.x, br.wander.z, 1, dt); b.sprint = true; if (wd < 2.5 || br.pathFail) br.wander = null; }
-  else if (state === 'search') { const iv = br.invest; const d = followPath(b, iv.x, iv.z, 0.85, dt); if (d < 3 || br.pathFail) { br.invest = null; } b.sprint = d > 14; if (b.sprint) b.speed = 5.2; }
+  else if (state === 'search') { const iv = br.invest; const d = followPath(b, iv.x, iv.z, 0.85, dt); if (d < 3) { br.invest = null; } b.sprint = d > 14; if (b.sprint) b.speed = 5.2; }
   else botLoot(b, br, D, dt);
   if (b.inWater) b.jumpHeld = true;
   // ---- apply movement flags ----
   if (b.sprint) b.speed = Math.max(b.speed, 5.3);
   stuckCheck(b, dt);
-  br.idleChk = (br.idleChk || 0) - dt;
-  if (br.idleChk <= 0) {
-    br.idleChk = 0.5; const imv = Math.hypot(b.x - (br.ix == null ? b.x : br.ix), b.z - (br.iz == null ? b.z : br.iz)); br.ix = b.x; br.iz = b.z;
-    if (imv < 0.3 && state !== 'fight' && !br.mining) br.idleT = (br.idleT || 0) + 0.5; else br.idleT = 0;
-    if (br.idleT >= 2.5) botGiveUp(b, br);
-  }
   if (br.strafeOverride) { }
   // aim vector
   b.aimV = aimDirOf(b.yaw, b.pitch);
@@ -3415,30 +3481,29 @@ function botUpdate(b, dt) {
 function botLoot(b, br, D, dt) {
   // decide goal: drop in view > chest > resource > POI
   b.sprint = true; br.mining = false;
-  const needGun = !botHasGun(b), needMats = (invCount(b.inv, 'wood') + invCount(b.inv, 'stone') + invCount(b.inv, 'iron')) < 60 && G.difficulty !== 'beginner' && G.t > (br.noGatherT || 0);
+  const needGun = !botHasGun(b), needMats = (invCount(b.inv, 'wood') + invCount(b.inv, 'stone') + invCount(b.inv, 'iron')) < 60 && G.difficulty !== 'beginner';
   if (!br.goal || br.goalT <= 0 || (br.goal.type === 'drop' && !G.drops.includes(br.goal.d)) || (br.goal.type === 'chest' && G.world.opened.has(G.world.key(br.goal.c.x, br.goal.c.y, br.goal.c.z)))) {
-    br.goal = null; br.goalT = 6 + Math.random() * 6; br.atGoalT = 0;
+    br.goal = null; br.goalT = 6 + Math.random() * 6;
     // visible drops
-    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; if (botIsBad(br, { type: 'drop', d })) continue; const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
+    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
     if (bd) br.goal = { type: 'drop', d: bd };
     else {
       const c = findChestNear(b.x, b.y, b.z, (needGun ? 80 : 45) * D.loot); // chests known from map + sight (approximation: bots scout near)
-      if (c && Math.hypot(c.x - b.x, c.z - b.z) < 90 && !botIsBad(br, { type: 'chest', c }) && (Math.random() < 0.85)) br.goal = { type: 'chest', c };
+      if (c && Math.hypot(c.x - b.x, c.z - b.z) < 90 && (Math.random() < 0.85)) br.goal = { type: 'chest', c };
       else if (needMats && Math.random() < 0.6) { br.goal = { type: 'gather' }; }
       else { const poi = botPickPOI(b); br.goal = { type: 'poi', x: poi.x, z: poi.z }; br.goalT = 18; }
     }
   }
   const g = br.goal; if (!g) return;
-  if (g.type === 'drop') { const gd = followPath(b, g.d.x, g.d.z, 1, dt); if (gd < 1.8) { br.atGoalT = (br.atGoalT || 0) + dt; if (br.atGoalT > 1.2) { botMarkBad(br, g); br.goal = null; } } else br.atGoalT = 0; }
-  else if (g.type === 'chest') { const gd = followPath(b, g.c.x + 0.5, g.c.z + 0.5, 1, dt); if (gd < 2.6 && Math.abs(g.c.y - b.y) < 6) { const c = g.c; openChest(b, c.x, c.y, c.z); br.goal = null; } else if (gd < 2.6) { br.atGoalT = (br.atGoalT || 0) + dt; if (br.atGoalT > 1) { botMarkBad(br, g); br.goal = null; } } }
+  if (g.type === 'drop') { followPath(b, g.d.x, g.d.z, 1, dt); }
+  else if (g.type === 'chest') { const gd = followPath(b, g.c.x + 0.5, g.c.z + 0.5, 1, dt); if (gd < 2.6 && Math.abs(g.c.y - b.y) < 6) { const c = g.c; openChest(b, c.x, c.y, c.z); br.goal = null; } }
   else if (g.type === 'poi') { const gd = followPath(b, g.x, g.z, 1, dt); if (gd < 5) { br.goal = null; br.goalT = 0; } }
-  if (br.pathFail && br.goal && g.type !== 'gather') { botMarkBad(br, g); br.goal = null; br.goalT = 0; }
   else if (g.type === 'gather') { botGather(b, br, D, dt); }
 }
 function botPickPOI(b) {
   const pois = G.world.pois.filter(p => !p.hidden && p.type !== 'tower' || Math.random() < 0.3);
   const Z = G.zone; let best = null, bs = -1e9;
-  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (botIsBad(b.brain, { type: 'poi', x: p.x, z: p.z })) sc -= 300; if (sc > bs) { bs = sc; best = p; } }
+  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (sc > bs) { bs = sc; best = p; } }
   return best || { x: G.world.W / 2, z: G.world.D / 2 };
 }
 function botGather(b, br, D, dt) {
@@ -3451,10 +3516,9 @@ function botGather(b, br, D, dt) {
       if (br.mineTarget) break;
       const top = w.getBlock(x, h, z); if (top === BK.stone && Math.random() < 0.15) { br.mineTarget = { x, y: h, z }; break; }
     }
-    if (!br.mineTarget) { br.goal = null; br.noGatherT = G.t + 10; return; }
+    if (!br.mineTarget) { br.goal = null; return; }
   }
   const t = br.mineTarget, gd = followPath(b, t.x + 0.5, t.z + 0.5, 1, dt);
-  if (br.pathFail) { br.mineTarget = null; br.goal = null; br.noGatherT = G.t + 5; return; }
   if (gd < 3.4) { br.mining = true; b.wishX = b.wishZ = 0; const dx = t.x + 0.5 - b.x, dz = t.z + 0.5 - b.z; b.yaw += clamp(angDiff(b.yaw, Math.atan2(-dx, -dz)), -0.4, 0.4); b.pitch = Math.atan2(t.y + 0.5 - (b.y + 1.6), Math.hypot(dx, dz)); }
 }
 function botMine(b, br, dt) {
@@ -5469,8 +5533,9 @@ function frame(dt) {
     if (!r.tag) { r.tag = el('div', 'mp-tag', '<span></span><i><b></b></i>'); tags.appendChild(r.tag); }
     if (r.tagDirty) { r.tagDirty = false; r.tag.firstChild.textContent = r.name; r.tag.querySelector('b').style.width = r.hp + '%'; }
     v.set(r.x, r.y + 2.2, r.z).project(cam); const d = Math.hypot(r.x - cam.position.x, r.z - cam.position.z);
-    const cp = cam.position, hidden = segBlocked(cp.x, cp.y, cp.z, r.x, r.y + 1.7, r.z) && segBlocked(cp.x, cp.y, cp.z, r.x, r.y + 0.9, r.z);
-    if (r.dead || v.z > 1 || d > 100 || hidden) r.tag.style.display = 'none';
+    r.losT = (r.losT || 0) - dt;
+    if (r.losT <= 0 || r.los == null) { r.losT = 0.12; r.los = !segBlocked(cam.position.x, cam.position.y, cam.position.z, r.x, r.y + 1.5, r.z) || !segBlocked(cam.position.x, cam.position.y, cam.position.z, r.x, r.y + 2.2, r.z); }
+    if (r.dead || v.z > 1 || d > 100 || !r.los) r.tag.style.display = 'none';
     else { r.tag.style.display = ''; r.tag.style.left = ((v.x * 0.5 + 0.5) * W) + 'px'; r.tag.style.top = ((-v.y * 0.5 + 0.5) * H) + 'px'; r.tag.style.opacity = clamp(1.4 - d / 80, 0.3, 1); }
   }
   if (MP.t - MP.tPres >= 0.1) { MP.tPres = MP.t; const o = myPresence(), j = JSON.stringify(o); if (j !== MP.lastPres) { MP.lastPres = j; room.presence(o).catch(() => { }); } }
