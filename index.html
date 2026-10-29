@@ -267,6 +267,8 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
       <button class="btn" id="m-custom">Character</button>
       <button class="btn" id="m-settings">Settings</button>
       <button class="btn" id="m-controls">Controls</button>
+      <button class="btn" id="m-sound">Lobby music: On</button>
+      <label for="m-vol" style="display:block;margin-top:6px">Volume: <span id="m-vol-v" style="color:var(--amber)"></span></label><input type="range" id="m-vol" min="0" max="1" step="0.05" style="width:100%;accent-color:var(--amber)">
       <button class="btn small" id="m-full" style="margin-top:6px;align-self:flex-start">Fullscreen</button>
     </div>
     <p class="foot">Single-player with AI opponents. Keyboard and mouse required. Click inside the game to capture the mouse, press Esc to release it.</p>
@@ -391,7 +393,7 @@ const Store = {
 
 /* ---------- settings ---------- */
 const DEFAULT_SETTINGS = {
-  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
+  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, sound: true, volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
   invertY: false, crosshair: true, difficulty: 'normal', showFps: false, hints: true, quality: 'high'
 };
 const Settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -442,12 +444,13 @@ const Snd = {
       this.master.connect(comp); comp.connect(c.destination);
       this.sfxBus = c.createGain(); this.sfxBus.connect(this.master);
       this.musBus = c.createGain(); this.musBus.gain.value = Settings.music * 0.5; this.musBus.connect(this.master);
+      this.lobBus = c.createGain(); this.lobBus.gain.value = Settings.music * 0.5; this.lobBus.connect(this.master);
       const len = c.sampleRate * 2, b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       this.noiseBuf = b;
     } catch (e) { this.ctx = null; this.enabled = false; }
   },
-  setVolume() { if (this.master) this.master.gain.value = Settings.volume; if (this.musBus) this.musBus.gain.value = Settings.music * 0.5; },
+  setVolume() { if (this.master) this.master.gain.value = Settings.volume; if (this.musBus) this.musBus.gain.value = Settings.music * 0.5; if (this.lobBus) this.lobBus.gain.value = Settings.music * 0.5; },
   _out(p, pri) {
     // returns the destination node for a voice, or null if it should not play
     const c = this.ctx; if (!c || !this.enabled) return null;
@@ -519,7 +522,27 @@ const Snd = {
     };
     this.musicTimer = setInterval(tick, 250); tick();
   },
-  stopMusic() { this.musicOn = false; clearInterval(this.musicTimer); }
+  stopMusic() { this.musicOn = false; clearInterval(this.musicTimer); },
+  /* ---- lobby / menu music ---- */
+  lobbyOn: false, lobbyTimer: 0,
+  startLobby() {
+    if (!this.ctx || this.lobbyOn || !this.lobBus) return; this.lobbyOn = true;
+    const c = this.ctx, mf = m => 440 * Math.pow(2, (m - 69) / 12), chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], arp = [0, 1, 2, 1, 2, 1, 0, 1];
+    let next = c.currentTime + 0.2, st = 0;
+    const tick = () => {
+      if (!this.lobbyOn) return;
+      while (next < c.currentTime + 0.6) {
+        const k = st % 8, ch = chords[Math.floor(st / 8) % 4];
+        if (k === 0) { for (const n of ch) this._tone(this.lobBus, next, 3.4, 'sine', mf(n), 0, 0.07, 0); this._tone(this.lobBus, next, 1.6, 'triangle', mf(ch[0] - 24), 0, 0.12, 0); }
+        if (k === 4) this._tone(this.lobBus, next, 1.2, 'triangle', mf(ch[0] - 24), 0, 0.08, 0);
+        this._tone(this.lobBus, next, 0.55, 'triangle', mf(ch[arp[k]] + 12), 0, 0.07, 0);
+        if (k === 0 && Math.floor(st / 8) % 2 === 1) this._tone(this.lobBus, next + 0.2, 0.9, 'sine', mf(ch[2] + 24), 0, 0.04, 0);
+        next += 0.42; st++;
+      }
+    };
+    this.lobbyTimer = setInterval(tick, 250); tick();
+  },
+  stopLobby() { this.lobbyOn = false; clearInterval(this.lobbyTimer); }
 };
 
 /* each sfx: fn(S, out, t, p) */
@@ -4890,7 +4913,7 @@ const UI = {
   resume() { this.closeAllPanels(); G.paused = false; Input.lmb = Input.rmb = false; this.requestLock(); },
   quitToMenu() {
     if (G.mode === 'survival' && G.P && !G.P.dead) Save.write('survival', 0, true); else if (G.mode === 'creative' && G.P) Save.write('creative', G.creativeSlot || 0, true);
-    this.closeAllPanels(); this.releaseLock(); clearSession(); G.mode = 'menu'; G.started = false; $('endpanel').classList.remove('on'); $('deathpanel').classList.remove('on'); this.showHud(false); this.showScreen('main'); Menu.start();
+    this.closeAllPanels(); this.releaseLock(); clearSession(); Snd.stopMusic(); G.mode = 'menu'; G.started = false; $('endpanel').classList.remove('on'); $('deathpanel').classList.remove('on'); this.showHud(false); this.showScreen('main'); Menu.start();
   },
   /* ---------------- panels rendering ---------------- */
   renderBR() { for (const c of document.querySelectorAll('[data-diff]')) c.classList.toggle('sel', c.dataset.diff === Settings.difficulty); $('br-bots-v').textContent = $('br-bots').value; const sz = parseInt($('br-size').value, 10); $('br-size-v').textContent = (sz * 16) + ' × ' + (sz * 16); },
@@ -4911,7 +4934,7 @@ const UI = {
     const toggle = (key, cb) => { const b = el('button', 'tg' + (Settings[key] ? ' on' : ''), Settings[key] ? 'On' : 'Off'); b.addEventListener('click', () => { Settings[key] = !Settings[key]; b.classList.toggle('on', Settings[key]); b.textContent = Settings[key] ? 'On' : 'Off'; saveSettings(); Snd.play('click'); if (cb) cb(); }); return b; };
     row('Field of view', slider('fov', 60, 110, 1, v => v + '°')); row('Mouse sensitivity', slider('sens', 0.2, 3, 0.05, v => v.toFixed(2) + '×'));
     row('View distance', slider('viewDist', 3, 10, 1, v => v + ' chunks')); row('Render scale', slider('renderScale', 0.5, 1.25, 0.05, v => Math.round(v * 100) + '%', () => G.rend && G.rend.size(window.innerWidth, window.innerHeight)));
-    row('Sound volume', slider('volume', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume())); row('Music volume', slider('music', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume()));
+    row('Lobby music on/off', toggle('sound', () => Snd.setVolume())); row('Sound volume', slider('volume', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume())); row('Music volume', slider('music', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume()));
     const dsel = el('div', 'chips'); for (const d of ['beginner', 'normal', 'advanced', 'expert']) { const c = el('button', 'chip' + (Settings.difficulty === d ? ' sel' : ''), d[0].toUpperCase() + d.slice(1)); c.addEventListener('click', () => { Settings.difficulty = d; saveSettings(); this.renderSettings(); }); dsel.appendChild(c); } row('AI difficulty (next match)', dsel);
     row('Damage numbers', toggle('dmgNumbers')); row('Screen shake', toggle('shake')); row('View bob (first person)', toggle('bob')); row('Invert Y axis', toggle('invertY')); row('Crosshair', toggle('crosshair')); row('Show FPS', toggle('showFps')); row('Gameplay hints', toggle('hints'));
     const rb = el('button', 'btn small', 'Reset hints'); rb.addEventListener('click', () => { Store.del('hints'); G.hintsShown = {}; HUD.toast('Hints reset'); }); row('Tutorial hints', rb);
@@ -5591,9 +5614,15 @@ const PROJ = ['arrow', 'bolt', 'grenade', 'smoke', 'snow', 'jumppad'];
 const css = document.createElement('style');
 css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);font:600 12px var(--display);letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;white-space:nowrap;pointer-events:none}.mp-tag i{display:block;width:54px;height:4px;margin:2px auto 0;background:#0009;border:1px solid #000}.mp-tag i b{display:block;height:100%;background:#7de86a}#mp-board{position:absolute;top:46px;left:10px;min-width:150px;background:var(--panel);border:1px solid var(--edge);padding:6px 10px;font-size:12px;letter-spacing:.06em;pointer-events:none}#mp-board div{display:flex;justify-content:space-between;gap:14px}#mp-board .me{color:var(--amber)}#mp-board .hd{color:var(--dim);letter-spacing:.14em;font-size:10px;margin-bottom:3px}.card .mp-opt{display:flex;align-items:flex-start;gap:10px;font-family:var(--body);font-size:15px;letter-spacing:0;text-transform:none;color:var(--ink);cursor:pointer;line-height:1.35}.mp-opt input{margin-top:3px;accent-color:var(--amber);width:18px;height:18px;flex:none}.mp-opt small{display:block;color:var(--dim);font-size:13px}';
 document.head.appendChild(css);
+const lobbyWatch = () => { try { const want = Settings.sound && $('menu').classList.contains('on') && !$('hud').classList.contains('on'); if (want) Snd.startLobby(); else if (Snd.lobbyOn) Snd.stopLobby(); } catch (e) { } };
+setInterval(lobbyWatch, 400); document.addEventListener('pointerdown', () => { try { Snd.init(); } catch (e) { } lobbyWatch(); });
+{ const sb = $('m-sound'); if (sb) { const sl = () => { sb.textContent = 'Lobby music: ' + (Settings.sound ? 'On' : 'Off'); }; sl();
+  const vi = $('m-vol'), vl = () => { $('m-vol-v').textContent = Math.round(Settings.volume * 100) + '%'; };
+  if (vi) { vi.value = Settings.volume; vl(); vi.addEventListener('input', () => { Settings.volume = parseFloat(vi.value); saveSettings(); try { Snd.init(); Snd.setVolume(); } catch (e) { } vl(); }); vi.addEventListener('change', () => { try { Snd.play('click'); } catch (e) { } }); }
+  sb.addEventListener('click', () => { Settings.sound = !Settings.sound; saveSettings(); try { Snd.init(); Snd.setVolume(); Snd.play('click'); lobbyWatch(); } catch (e) { } sl(); }); } }
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div id="mp-sizebox"><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">You choose the size. Friends who join with your code get it automatically. Bigger worlds take longer to generate, so keep it small on phones.</div></div><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
 css.textContent += '.mpl-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(43,55,80,.6);font-family:var(--display);letter-spacing:.06em;font-size:16px}.mpl-row em{font-style:normal;color:var(--amber);font-size:12px;letter-spacing:.12em}.mpl-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mpl-msg{margin-top:10px}';
 const csec = el('section', 'screen'); csec.id = 'scr-mpc';
@@ -5611,7 +5640,12 @@ $('mp-monsters').checked = Store.get('mpmonsters', true) !== false;
 $('mp-animals').checked = Store.get('mpanimals', true) !== false;
 $('mp-animals').addEventListener('change', () => { Store.set('mpanimals', $('mp-animals').checked); Snd.play('click'); });
 $('mp-monsters').addEventListener('change', () => { Store.set('mpmonsters', $('mp-monsters').checked); Snd.play('click'); });
+const sizeIn = $('mp-size'), sizeLbl = () => { const n = parseInt(sizeIn.value, 10) || 12; $('mp-size-v').textContent = (n * 16) + ' × ' + (n * 16) + ' blocks'; };
+{ let sv = parseInt(Store.get('mpsize', 12), 10); if (!(sv >= 6 && sv <= 20)) sv = 12; sizeIn.value = sv; sizeLbl(); }
+sizeIn.addEventListener('input', () => { sizeLbl(); Store.set('mpsize', parseInt(sizeIn.value, 10)); });
+let hostMode = false;
 const setMode = host => {
+  hostMode = !!host; $('mp-sizebox').style.display = host ? '' : 'none';
   sec.querySelector('h2').textContent = host ? 'Host a game' : 'Join a game';
   $('mp-join').textContent = host ? 'Create room' : 'Join room';
   $('mp-rand').style.display = host ? '' : 'none';
@@ -5635,7 +5669,7 @@ async function join() {
     let R = null; try { const C = window.claude; R = C && C.use ? await C.use('room') : null; } catch (x) { R = null; }
     if (!R && !window.CraftnitePeerRoom) throw new Error('Multiplayer could not start in this browser.');
     const say = t => { st(t); try { if (MP.active && t) HUD.toast(t); } catch (x) { } };
-    const size = 12, key = 'cn-' + code + '-s' + size; MP.size = size;
+    const size = hostMode ? Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)) : 12, key = 'cn-' + code; MP.size = size;
     MP.room = R ? await R.join(key) : await window.CraftnitePeerRoom.join(key, say); MP.code = code; st('');
     MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); Store.set('mpmonsters', !MP.noMonsters);
     lobbyEnter();
@@ -5657,16 +5691,24 @@ function lobbyRender(S) {
 }
 function lobbyRefresh() {
   if (!L.on || L.starting || !MP.room) return;
-  const S = CraftniteLobby.state(MP.room.peers());
+  const S = CraftniteLobby.state(MP.room.peers()); adoptSize(S);
   if (S.started) { lobbyBegin(); return; }
   lobbyRender(S);
 }
+const mplInfo = () => { $('mpl-info').textContent = 'Room code: ' + MP.code.toUpperCase() + ' · world ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''); };
+function adoptSize(S) {
+  const hs = S && S.host && S.host.presence && S.host.presence.sz;
+  if (typeof hs === 'number' && hs >= 6 && hs <= 20) {
+    if (hs !== MP.size) { MP.size = hs; mplInfo(); }
+    if (S.me && S.me.presence.sz !== hs) { try { MP.room.presence({ sz: hs }).catch(() => { }); } catch (e) { } }
+  }
+}
 function lobbyEnter() {
   const room = MP.room; L.on = true; L.starting = false; MP.conn = true;
-  room.presence({ lb: 1, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
+  room.presence({ lb: 1, sz: MP.size, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
   L.offs = [room.onPeers(lobbyRefresh), room.onConnection(c => { MP.conn = c; lobbyRefresh(); })];
   clearInterval(L.timer); L.timer = setInterval(lobbyRefresh, 500);
-  $('mpl-info').textContent = 'Room code: ' + MP.code.toUpperCase() + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : '');
+  mplInfo();
   UI.showScreen('mpl'); lobbyRefresh();
 }
 function lobbyStop() { L.on = false; clearInterval(L.timer); for (const f of L.offs) { try { f(); } catch (e) { } } L.offs = []; }
@@ -5676,7 +5718,8 @@ function lobbyLeave() {
 async function lobbyBegin() {
   if (L.starting) return; L.starting = true; lobbyStop(); MP.joining = true;
   try {
-    const key = 'cn-' + MP.code + '-s' + MP.size;
+    try { adoptSize(CraftniteLobby.state(MP.room.peers())); } catch (e) { }
+    const key = 'cn-' + MP.code;
     await startSession('survival', { seed: hashStr(key), size: MP.size });
     try { MP.room.presence({ lb: null }).catch(() => { }); } catch (e) { }
     start();
@@ -5702,7 +5745,7 @@ function start() {
   kit(P); P.kills = 0; G.kills = 0; P.invuln = 3; MP.spawnT = 2;
   MP.offs = [room.on('ev', onEv), room.onPeers(onPeers), room.onConnection(c => { MP.conn = c; if (c) MP.lastPres = ''; })];
   board.style.display = '';
-  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · ' + (MP.size * 16) + '×' + (MP.size * 16) + ' · share the code and size' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''), '#6ab0ff');
+  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · ' + (MP.size * 16) + '×' + (MP.size * 16) + ' · share the code' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''), '#6ab0ff');
 }
 function stop() {
   if (!MP.active) return; MP.active = false;
