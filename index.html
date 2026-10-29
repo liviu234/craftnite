@@ -160,7 +160,7 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
 #hpwrap.low #hpbar{background:linear-gradient(#ff7a6a,#d12b2b)}
 #rightbot{position:absolute;right:14px;bottom:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 #mats{display:flex;gap:6px}#mats span{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--edge);padding:3px 8px;font-size:13px;font-variant-numeric:tabular-nums}#mats span.sel{border-color:var(--sky);background:#14304a}
-#ammo{text-align:right;text-shadow:0 1px 3px #000}#ammo .an{font-size:13px;letter-spacing:.08em}#ammo .am{display:flex;align-items:baseline;justify-content:flex-end;gap:6px}#ammo .am b{font-size:42px;line-height:1;font-variant-numeric:tabular-nums}#ammo .am span{font-size:18px;color:var(--dim)}#ammo .am em{font-style:normal;font-size:16px;color:var(--amber);margin-left:8px}
+#ammo{text-align:right;text-shadow:0 1px 3px #000}#ammo .an{font-size:13px;letter-spacing:.08em}#ammo .am{display:flex;align-items:baseline;justify-content:flex-end;gap:6px}#ammo .am b{font-size:42px;line-height:1;font-variant-numeric:tabular-nums}#ammo .am span{font-size:18px;color:var(--dim)}#ammo .am em{font-style:normal;font-size:16px;color:var(--amber);margin-left:8px;display:inline-flex;align-items:center;gap:4px}#ammo .ai{width:26px;height:26px;image-rendering:pixelated;vertical-align:middle;filter:drop-shadow(0 1px 2px #000)}#ammo .am span .ai{margin-right:6px}
 .rl{width:120px;height:4px;background:#0008;margin-left:auto;margin-top:4px}.rl i{display:block;height:100%;background:var(--amber)}
 /* ---------- panels ---------- */
 .panel{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,8,14,.72);z-index:20;pointer-events:auto;padding:16px;overflow:auto}
@@ -1105,6 +1105,65 @@ function makeIcon(s, size) {
   else c = pxIcon(size, (R) => R(3, 3, 10, 10, it.color));
   ICON_CACHE[key] = c; return c;
 }
+/* ---------- ammo icons: hand-drawn pixel art (16x16 grid) with an automatic dark outline ---------- */
+const AMMO_PAL = { h: '#fff0b0', B: '#e2b252', b: '#a87a2c', k: '#ffc08a', C: '#e07c3c', c: '#9a4a1e', w: '#ffffff', S: '#d8dee8', s: '#8d96a6', g: '#8ee06a', G: '#3f9a30', M: '#d9a24a', m: '#8a5f20', R: '#e8503e', r: '#9a2418', p: '#ff9a8a', D: '#5a5f6c', d: '#2a2d35', e: '#9aa3b4', Y: '#f4ecd0', y: '#c8bd98', W: '#e6d6ae', V: '#b09c6c', F: '#d4e0ee', f: '#7f93a8', T: '#3a3d45', N: '#ff5a46', Q: '#b3281c' };
+function paintAmmoIcon(id, R) {
+  const M = new Map();
+  const set = (x, y, k) => { if (x >= 0 && y >= 0 && x < 16 && y < 16) M.set(x + ',' + y, AMMO_PAL[k] || k); };
+  const art = (rows, x0, yBottom) => { const y0 = yBottom - rows.length + 1; rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== '.') set(x0 + i, y0 + j, row[i]); }); };
+  const dup = (rows, at, n, row) => { const o = rows.slice(); for (let i = 0; i < n; i++) o.splice(at, 0, row); return o; };
+  switch (id) {
+    case 'ammo_l': {
+      const c = ['.C.', 'kCc', 'kCc', 'cCc', 'hBb', 'hBb', 'hBb', 'hBb', 'hBb', 'bbb'];
+      art(c, 3, 13); art(dup(c, 4, 2, 'hBb'), 7, 13); art(c, 11, 13); break;
+    }
+    case 'ammo_m': {
+      const c = ['.S.', 'wSs', 'MMm', 'gGG', 'MMm', 'bBb', 'hBb', 'hBb', 'hBb', 'hBb', 'hBb', 'bbb'];
+      art(c.slice(0, 6).concat(c.slice(8)), 3, 13); art(c, 7, 13); art(c.slice(0, 6).concat(c.slice(8)), 11, 13); break;
+    }
+    case 'ammo_h': {
+      const c = ['..d..', '.dDd.', 'eDDDd', 'eDDDd', 'pNNNQ', 'eDDDd', 'sSSSs', 'wSSSs', 'wSSSs', 'wSSSs', 'wSSSs', 'sssss'];
+      art(c, 3, 13); art(c.slice(0, 7).concat(c.slice(9)), 9, 13); break;
+    }
+    case 'shells': {
+      const c = ['.rRr.', 'pRRRr', 'pRRRr', 'pRRRr', 'YYYYy', 'pRRRr', 'pRRRr', 'hBBBb', 'hBBBb', 'hBBBb', 'bbbbb'];
+      art(c, 3, 13); art(c.slice(0, 2).concat(c.slice(4)), 9, 13); break;
+    }
+    case 'arrow': {
+      const arrowAt = (x, y, len) => {
+        /* two-pixel stair shaft running up and to the right */
+        for (let i = 0; i < len; i++) { set(x + i, y - i, 'W'); set(x + i + 1, y - i, 'V'); }
+        /* three-feather fletching: red outer feather, dark red inner, on both sides of the shaft */
+        for (let i = 0; i < 3; i++) { set(x + i - 1, y - i - 1, 'N'); set(x + i + 2, y - i + 1, 'Q'); }
+        for (let i = 1; i < 3; i++) { set(x + i - 2, y - i - 1, 'N'); set(x + i + 3, y - i + 1, 'Q'); }
+        set(x - 1, y + 1, 'T'); set(x, y + 1, 'T');
+        /* steel broadhead with a bright edge */
+        const hx = x + len, hy = y - len;
+        const head = [[0, 0, 'S'], [1, 0, 's'], [0, -1, 'w'], [1, -1, 'S'], [2, -1, 's'], [1, -2, 'w'], [2, -2, 'S'], [3, -2, 's'], [2, -3, 'w'], [3, -3, 'S'], [-1, -1, 's'], [1, 1, 's']];
+        for (const [dx, dy, k] of head) set(hx + dx, hy + dy, k);
+      };
+      arrowAt(2, 13, 8); break;
+    }
+    case 'bolt': {
+      const boltAt = (x, y, len) => {
+        for (let i = 0; i < len; i++) { set(x + i, y, 'F'); set(x + i, y + 1, 'f'); }
+        set(x - 1, y, 'T'); set(x - 1, y + 1, 'T');
+        /* stabiliser fins */
+        for (const [dx, dy] of [[1, -2], [2, -1], [3, -1], [1, 3], [2, 2], [3, 2]]) set(x + dx, y + dy, 'D');
+        set(x + 2, y - 2, 'e'); set(x + 2, y + 3, 'e');
+        /* steel head: wider than the shaft, tapering to a point */
+        const hx = x + len;
+        set(hx, y - 1, 'e'); set(hx, y, 'w'); set(hx, y + 1, 'S'); set(hx, y + 2, 'e');
+        set(hx + 1, y, 'w'); set(hx + 1, y + 1, 'S'); set(hx + 2, y, 'F'); set(hx + 2, y + 1, 's');
+      };
+      boltAt(2, 3, 8); boltAt(2, 10, 8); break;
+    }
+  }
+  const out = new Set();
+  M.forEach((_, k) => { const [x, y] = k.split(',').map(Number); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = (x + dx) + ',' + (y + dy); if (!M.has(kk)) out.add(kk); } });
+  out.forEach(k => { const [x, y] = k.split(',').map(Number); if (x >= 0 && y >= 0 && x < 16 && y < 16) R(x, y, 1, 1, '#17181e'); });
+  M.forEach((col, k) => { const [x, y] = k.split(',').map(Number); R(x, y, 1, 1, col); });
+}
 function paintMiscIcon(id, R, P, x, u) {
   const o = '#17181e';
   const blob = (col, hi) => { R(4, 5, 8, 7, o); R(3, 7, 10, 4, o); R(5, 5, 6, 6, col); R(4, 7, 8, 3, col); R(6, 6, 2, 2, hi); R(9, 9, 2, 1, hi); };
@@ -1122,9 +1181,7 @@ function paintMiscIcon(id, R, P, x, u) {
     case 'alloy': R(2, 5, 12, 7, o); R(3, 6, 10, 5, '#5fd0c8'); R(3, 6, 10, 1, '#aaf4ee'); R(3, 10, 10, 1, '#2d948d'); break;
     case 'meat': R(4, 4, 8, 8, o); R(5, 5, 6, 6, '#d86a6a'); R(6, 6, 3, 3, '#f09a9a'); R(10, 9, 3, 4, '#f2f2f2'); break;
     case 'snowball': R(4, 4, 8, 8, o); R(5, 5, 6, 6, '#eef6ff'); R(6, 6, 2, 2, '#ffffff'); break;
-    case 'ammo_l': case 'ammo_m': case 'ammo_h': case 'shells': { const col = ITEM[id].color; const n = id === 'ammo_h' ? 2 : 3; for (let i = 0; i < n; i++) { const bx = 3 + i * (id === 'ammo_h' ? 5 : 4); R(bx, 3, 3, 10, o); R(bx + 0.5, 4, 2, 4, col); R(bx + 0.5, 8, 2, 4, '#c9a15a'); } if (id === 'shells') { R(3, 5, 10, 7, o); R(4, 6, 8, 3, '#e04a3a'); R(4, 9, 8, 2, '#d8b060'); } break; }
-    case 'arrow': R(2, 8, 12, 1, '#d9c7a0'); R(12, 7, 3, 3, '#cfd5de'); R(2, 6, 3, 2, '#e04a3a'); R(2, 9, 3, 2, '#e04a3a'); break;
-    case 'bolt': R(2, 8, 11, 1, '#9fb4c8'); R(12, 7, 3, 3, '#e0e6ee'); R(2, 7, 2, 3, '#667'); break;
+    case 'ammo_l': case 'ammo_m': case 'ammo_h': case 'shells': case 'arrow': case 'bolt': paintAmmoIcon(id, R); break;
     case 'bandage': R(3, 5, 10, 7, o); R(4, 6, 8, 5, '#f2f2f2'); R(7, 6, 2, 5, '#e04a4a'); R(5, 8, 6, 1, '#e04a4a'); break;
     case 'medkit': R(2, 4, 12, 9, o); R(3, 5, 10, 7, '#f2f2f2'); R(7, 6, 2, 5, '#e03a3a'); R(5, 8, 6, 1, '#e03a3a'); R(6, 3, 4, 2, o); break;
     case 'shield_s': case 'shield_b': { const col = ITEM[id].color; R(6, 2, 4, 3, o); R(4, 5, 8, 9, o); R(5, 6, 6, 7, col); R(6, 7, 2, 3, '#e8f4ff'); if (id === 'shield_b') R(4, 5, 8, 2, '#ffffff'); break; }
@@ -2850,12 +2907,209 @@ function dropAmmoModel(stack) {
   } else return null;
   g.scale.set(1.15, 1.15, 1.15); return g;
 }
+/* ---------- detailed dropped-item models: resources, healing, throwables, gadgets, tools and blocks ---------- */
+const _igeo = {};
+function igeo(k, mk) { return _igeo[k] || (_igeo[k] = mk()); }
+const TIER_COL = [0xb98648, 0x9aa0aa, 0xe8eaf0, 0x5ff0ff, 0xff8a30], TIER_DK = [0x82552c, 0x666b76, 0x9aa0ac, 0x2aa0b8, 0xc24a10], TIER_EM = [0, 0, 0, 0x1b6a78, 0x7a2a08];
+function dropItemModel(stack) {
+  const id = stack.id, it = ITEM[id]; if (!it) return null;
+  const g = new THREE.Group();
+  const add = (geo, c, x, y, z, o) => {
+    const m = new THREE.Mesh(geo, dgMat(c, o && o.em)); m.position.set(x, y, z);
+    if (o) { if (o.rx) m.rotation.x = o.rx; if (o.ry) m.rotation.y = o.ry; if (o.rz) m.rotation.z = o.rz; if (o.s) m.scale.set(o.s[0], o.s[1], o.s[2]); }
+    g.add(m); return m;
+  };
+  const box = (w, h, d, c, x, y, z, o) => add(boxGeo(w, h, d), c, x, y, z, o);
+  const cyl = (rt, rb, h, c, x, y, z, o) => add(cylGeo(rt, rb, h), c, x, y, z, o);
+  const ico = (r, c, x, y, z, o) => add(igeo('i' + r, () => new THREE.IcosahedronGeometry(r, 0)), c, x, y, z, o);
+  const oct = (r, c, x, y, z, o) => add(igeo('o' + r, () => new THREE.OctahedronGeometry(r, 0)), c, x, y, z, o);
+  const sph = (r, c, x, y, z, o) => add(igeo('s' + r, () => new THREE.SphereGeometry(r, 10, 8)), c, x, y, z, o);
+  const tor = (r, t, c, x, y, z, o) => add(igeo('t' + r + ',' + t, () => new THREE.TorusGeometry(r, t, 5, 10)), c, x, y, z, o);
+  /* a faceted rock that sits on the ground */
+  const rock = (r, c, x, lift, z, sx, sy, sz, ry, em) => ico(r, c, x, lift + r * sy * 0.8, z, { s: [sx, sy, sz], ry: ry || 0, em: em });
+  const WOOD = 0x8a5a2e, WOOD2 = 0x6b4420, DK = 0x23252d, STEEL = 0x8b93a3, SIL = 0xcfd5de, CREAM = 0xf4f0e0;
+  const mul = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
+  let sc = 1.25;
+  const log = (cx, cy, cz, ry, len, r) => {
+    cyl(r, r, len, WOOD, cx, cy, cz, { rz: Math.PI / 2, ry: ry });
+    for (const s of [-1, 1]) {
+      const ex = cx + Math.cos(ry) * s * (len / 2), ez = cz - Math.sin(ry) * s * (len / 2);
+      cyl(r * 0.94, r * 0.94, 0.012, 0xd7a566, ex, cy, ez, { rz: Math.PI / 2, ry: ry });
+      cyl(r * 0.5, r * 0.5, 0.016, 0xb9783d, ex, cy, ez, { rz: Math.PI / 2, ry: ry });
+    }
+  };
+  switch (id) {
+    /* ----- ores and resources ----- */
+    case 'wood': log(0, 0.075, -0.09, 0.1, 0.42, 0.075); log(0, 0.075, 0.09, -0.05, 0.42, 0.075); log(0.01, 0.2, 0, 0.03, 0.4, 0.07); box(0.05, 0.03, 0.05, WOOD2, 0.1, 0.285, 0.02); break;
+    case 'stone':
+      rock(0.17, 0x9296a0, 0, 0, 0, 1.15, 0.9, 1.0, 0.3); rock(0.12, 0xa9adb8, 0.18, 0, 0.06, 1, 0.8, 1, 0.8); rock(0.1, 0x7c8089, -0.15, 0, 0.1, 1, 0.85, 1.1, 1.4);
+      rock(0.07, 0xb4b8c2, 0.02, 0, -0.17, 1, 0.8, 1, 0); rock(0.09, 0xb8bcc6, 0.01, 0.17, 0.0, 1, 0.8, 1, 0.5); rock(0.035, 0x8a8e98, -0.2, 0, -0.1, 1, 0.8, 1, 0); break;
+    case 'iron':
+      rock(0.2, 0x5f636d, 0, 0, 0, 1.1, 0.95, 1, 0.2); rock(0.11, 0x6f737d, 0.19, 0, 0.08, 1, 0.9, 1, 0.9);
+      for (const [x, y, z, s] of [[0.12, 0.25, 0.1, 1], [-0.12, 0.2, 0.15, 0.8], [0.0, 0.33, -0.05, 1.1], [0.2, 0.14, -0.06, 0.8], [-0.17, 0.14, -0.1, 0.9], [0.22, 0.12, 0.1, 0.7]]) oct(0.045 * s, 0xe4d2bc, x, y, z, { em: 0x3a3228, s: [1, 1.3, 1] });
+      oct(0.04, 0x8a5a38, -0.05, 0.26, 0.16, {}); break;
+    case 'copper':
+      rock(0.2, 0x5a4a44, 0, 0, 0, 1.1, 0.95, 1, 0.5); rock(0.1, 0x6a574f, -0.19, 0, 0.07, 1, 0.85, 1, 0.2);
+      for (const [x, y, z, s] of [[0.1, 0.27, 0.1, 1.1], [-0.1, 0.22, 0.14, 0.9], [0.02, 0.34, -0.04, 1], [0.2, 0.15, -0.04, 0.9], [-0.16, 0.16, -0.1, 1]]) oct(0.05 * s, 0xe88a4a, x, y, z, { em: 0x4a2208, s: [1, 1.2, 1] });
+      oct(0.03, 0x4aa88a, 0.14, 0.2, 0.15, { em: 0x103a2c }); oct(0.025, 0x4aa88a, -0.02, 0.12, 0.2, { em: 0x103a2c }); break;
+    case 'crystal': {
+      rock(0.15, 0x56606e, 0, 0, 0, 1.4, 0.45, 1.2, 0.4);
+      const cr = (h, x, z, rz, rx, c) => oct(0.07, c, x, h * 0.5 + 0.03, z, { s: [1, h / 0.14, 1], rz: rz, rx: rx, em: 0x1b7a88 });
+      cr(0.38, 0, 0, 0, 0, 0x5ff0ff); cr(0.27, 0.11, 0.05, -0.3, 0.1, 0x8ffaff); cr(0.23, -0.1, 0.05, 0.35, 0, 0x38c2d8); cr(0.2, 0.03, -0.1, 0.1, -0.35, 0x5ff0ff); cr(0.16, 0.13, -0.07, -0.4, -0.2, 0x38c2d8); break;
+    }
+    case 'scrap': {
+      cyl(0.19, 0.19, 0.07, 0xb9783d, 0, 0.06, 0); cyl(0.07, 0.07, 0.08, DK, 0, 0.065, 0); cyl(0.12, 0.12, 0.075, 0xa56a34, 0, 0.062, 0);
+      for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; box(0.075, 0.07, 0.06, 0xa56a34, Math.cos(a) * 0.21, 0.06, Math.sin(a) * 0.21, { ry: -a }); }
+      box(0.3, 0.025, 0.15, 0x7a4e28, 0.04, 0.16, 0.03, { rz: 0.18, ry: 0.5 }); cyl(0.03, 0.03, 0.04, 0x9a9a9a, -0.1, 0.12, 0.12); box(0.12, 0.03, 0.03, 0x6b4420, 0.12, 0.05, -0.2, { ry: 0.6 }); break;
+    }
+    case 'frost': {
+      ico(0.13, 0xdff4ff, 0, 0.05, 0, { s: [1.4, 0.5, 1.2], em: 0x203a50 });
+      const sh = (h, x, z, rz, rx, c) => oct(0.06, c, x, h * 0.5 + 0.02, z, { s: [1, h / 0.12, 1], rz: rz, rx: rx, em: 0x305a78 });
+      sh(0.36, 0, 0, 0.1, 0, 0xbfe8ff); sh(0.26, 0.11, 0.05, -0.35, 0.1, 0xe8f8ff); sh(0.22, -0.11, 0.04, 0.4, 0, 0x9ad4f0); sh(0.18, 0.02, -0.11, 0, -0.4, 0xffffff); break;
+    }
+    case 'ember':
+      rock(0.19, 0x3a2c2a, 0, 0, 0, 1.1, 0.95, 1, 0.4); rock(0.1, 0x2c2220, 0.18, 0, 0.07, 1, 0.9, 1, 0.9);
+      sph(0.1, 0xff7a2a, 0, 0.27, 0, { em: 0xff5a10 }); sph(0.06, 0xffd070, 0, 0.3, 0, { em: 0xffb030 });
+      for (const [x, y, z, r] of [[0.17, 0.2, 0.05, 0.5], [-0.15, 0.18, 0.1, -0.4], [0.05, 0.14, 0.18, 0.2], [-0.07, 0.12, -0.18, 0.3]]) box(0.1, 0.018, 0.025, 0xff6a20, x, y, z, { ry: r, rz: 0.3, em: 0xff4a10 });
+      for (const [x, y, z] of [[0.1, 0.4, 0.04], [-0.08, 0.38, -0.05], [0.0, 0.45, 0.08]]) oct(0.03, 0xffd070, x, y, z, { em: 0xff9a30 }); break;
+    case 'aether': {
+      oct(0.1, 0xd6a8ff, 0, 0.3, 0, { em: 0x8a4ad0, s: [1, 1.6, 1] }); oct(0.05, 0xffffff, 0, 0.3, 0, { em: 0xf2e0ff, s: [1, 1.6, 1] });
+      cyl(0.17, 0.17, 0.012, 0xb080ff, 0, 0.012, 0, { em: 0x7a4ad0 });
+      for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3, r = 0.19; oct(0.035, 0xf2e0ff, Math.cos(a) * r, 0.14 + (k % 3) * 0.12, Math.sin(a) * r, { em: 0xb080ff, ry: a }); }
+      for (const [x, y, z] of [[0.1, 0.5, 0.05], [-0.1, 0.42, -0.06], [0.04, 0.12, -0.16]]) sph(0.018, 0xffffff, x, y, z, { em: 0xffffff }); break;
+    }
+    case 'fiber': {
+      const cols = [0x7ccf5a, 0x4ea23a, 0xa6e684, 0x5fb848, 0x8ad868, 0x4ea23a, 0x7ccf5a];
+      [[0, 0.05, -0.05], [0, 0.05, 0.0], [0, 0.05, 0.05], [0, 0.1, -0.025], [0, 0.1, 0.025], [0, 0.15, 0], [0.02, 0.05, 0.1]].forEach((p, k) => cyl(0.026, 0.02, 0.42, cols[k], p[0], p[1] + 0.02, p[2], { rz: Math.PI / 2, ry: (k - 3) * 0.03 }));
+      for (const x of [-0.1, 0.1]) cyl(0.085, 0.085, 0.035, WOOD, x, 0.1, 0, { rz: Math.PI / 2 });
+      cyl(0.012, 0.01, 0.1, 0x4ea23a, 0.22, 0.12, 0.04, { rz: 1.2 }); break;
+    }
+    case 'alloy': {
+      const ingot = (x, y, z, ry) => { box(0.36, 0.08, 0.16, 0x5fd0c8, x, y, z, { ry: ry }); box(0.3, 0.03, 0.11, 0xaaf4ee, x, y + 0.05, z, { ry: ry, em: 0x1a5a56 }); box(0.02, 0.085, 0.165, 0x2d948d, x + Math.cos(ry) * 0.17, y, z - Math.sin(ry) * 0.17, { ry: ry }); };
+      ingot(0, 0.04, -0.1, 0.05); ingot(0, 0.04, 0.1, -0.04); ingot(0.01, 0.125, 0, 0.12); break;
+    }
+    case 'meat':
+      ico(0.2, 0xd86a6a, 0, 0.16, 0, { s: [1.2, 0.8, 1] }); ico(0.12, 0xc45a5a, -0.1, 0.12, 0.1, { s: [1, 0.7, 1] });
+      box(0.2, 0.02, 0.04, 0xf0a0a0, 0.0, 0.31, 0.02, { ry: 0.4 }); box(0.14, 0.02, 0.03, 0xf0a0a0, 0.05, 0.28, -0.08, { ry: -0.3 });
+      cyl(0.026, 0.026, 0.26, 0xf2f2f2, 0.28, 0.14, 0.02, { rz: 1.3 }); sph(0.045, 0xf2f2f2, 0.4, 0.2, 0.02, {}); sph(0.04, 0xf2f2f2, 0.405, 0.17, 0.06, {}); break;
+    case 'snowball': sph(0.13, 0xeef6ff, 0, 0.13, 0); sph(0.1, 0xffffff, 0.16, 0.1, 0.06); sph(0.09, 0xe0ecf8, -0.05, 0.09, 0.16); sph(0.08, 0xffffff, 0.05, 0.27, 0.03); break;
+    /* ----- healing ----- */
+    case 'bandage':
+      cyl(0.12, 0.12, 0.22, 0xf2f2f2, 0, 0.13, 0, { rz: Math.PI / 2 }); cyl(0.124, 0.124, 0.05, 0xe04a4a, 0, 0.13, 0, { rz: Math.PI / 2 }); cyl(0.05, 0.05, 0.225, 0x9a8f80, 0, 0.13, 0, { rz: Math.PI / 2 });
+      box(0.22, 0.012, 0.09, 0xf2f2f2, 0, 0.01, 0.16, { ry: 0.0 }); box(0.1, 0.012, 0.08, 0xe0e0e0, 0.18, 0.012, 0.12, { ry: 0.5 }); cyl(0.07, 0.07, 0.13, 0xe9e9e9, -0.05, 0.07, -0.2, { rz: Math.PI / 2 }); break;
+    case 'medkit':
+      box(0.42, 0.26, 0.2, 0xf2f2f2, 0, 0.14, 0); box(0.43, 0.012, 0.21, 0xd8d8d8, 0, 0.145, 0); box(0.2, 0.065, 0.012, 0xe03a3a, 0, 0.14, 0.106); box(0.065, 0.2, 0.012, 0xe03a3a, 0, 0.14, 0.106);
+      box(0.2, 0.065, 0.012, 0xe03a3a, 0, 0.14, -0.106); box(0.065, 0.2, 0.012, 0xe03a3a, 0, 0.14, -0.106);
+      box(0.16, 0.035, 0.035, 0x3a3d45, 0, 0.29, 0); for (const x of [-0.08, 0.08]) box(0.035, 0.05, 0.035, 0x3a3d45, x, 0.265, 0);
+      for (const x of [-0.15, 0.15]) box(0.04, 0.05, 0.012, 0x8b93a3, x, 0.2, 0.106); break;
+    case 'shield_s': case 'shield_b': {
+      const big = id === 'shield_b', c = big ? 0x3a7bff : 0x5ab0ff, em = big ? 0x1a3a9a : 0x1a4a8a, k = big ? 1.3 : 1;
+      cyl(0.15 * k, 0.17 * k, 0.24 * k, c, 0, 0.12 * k, 0, { em: em }); sph(0.14 * k, c, 0, 0.24 * k, 0, { em: em, s: [1, 0.8, 1] });
+      cyl(0.18 * k, 0.18 * k, 0.012, 0xffffff, 0, 0.105 * k, 0, { em: 0x6a8ac0 });
+      cyl(0.05 * k, 0.07 * k, 0.1 * k, 0xdff0ff, 0, 0.36 * k, 0, { em: 0x3a5a80 }); cyl(0.06 * k, 0.055 * k, 0.05 * k, WOOD, 0, 0.44 * k, 0);
+      box(0.05 * k, 0.1 * k, 0.012, 0xe8f4ff, 0, 0.15 * k, 0.168 * k, { em: 0x9ab8e0 }); box(0.1 * k, 0.04 * k, 0.012, 0xe8f4ff, 0, 0.18 * k, 0.168 * k, { em: 0x9ab8e0 }); break;
+    }
+    case 'steak':
+      ico(0.22, 0xa8542d, 0, 0.07, 0, { s: [1.3, 0.38, 1.05], ry: 0.3 }); ico(0.12, 0xcf7a46, 0.02, 0.1, 0.0, { s: [1.2, 0.3, 1.0], ry: 0.3 });
+      for (const [x, z] of [[-0.1, 0], [0.0, 0], [0.1, 0]]) box(0.02, 0.012, 0.34, 0x5a2810, x, 0.15, z, { ry: 0.7 });
+      cyl(0.022, 0.022, 0.2, 0xf2f2f2, 0.3, 0.07, 0.1, { rz: 1.5, ry: -0.4 }); sph(0.04, 0xf2f2f2, 0.39, 0.075, 0.08, {}); sph(0.035, 0xf2f2f2, 0.38, 0.07, 0.14, {}); break;
+    /* ----- throwables and gadgets ----- */
+    case 'grenade':
+      sph(0.15, 0x6a8f5a, 0, 0.17, 0, { s: [1, 1.15, 1] });
+      for (const y of [0.1, 0.17, 0.24]) cyl(0.152, 0.152, 0.018, 0x4a6a3a, 0, y, 0, {});
+      cyl(0.055, 0.065, 0.07, 0x9a9a9a, 0, 0.36, 0); cyl(0.03, 0.03, 0.05, 0x6a6a6a, 0, 0.41, 0);
+      box(0.04, 0.2, 0.02, 0xb0b0b0, 0.1, 0.3, 0, { rz: -0.35 }); tor(0.05, 0.009, 0xe0c060, -0.06, 0.4, 0.03, { rx: 1.2 }); break;
+    case 'smoke':
+      cyl(0.11, 0.11, 0.3, 0xb8bcc4, 0, 0.17, 0); cyl(0.113, 0.113, 0.05, 0x6a6e78, 0, 0.1, 0); cyl(0.113, 0.113, 0.05, 0x6a6e78, 0, 0.26, 0);
+      cyl(0.07, 0.11, 0.05, 0x888c94, 0, 0.345, 0); cyl(0.03, 0.03, 0.05, 0x55585f, 0, 0.395, 0); box(0.04, 0.16, 0.02, 0xb0b0b0, 0.1, 0.34, 0, { rz: -0.3 });
+      cyl(0.114, 0.114, 0.012, 0xf2d04a, 0, 0.18, 0); break;
+    case 'barrier':
+      box(0.42, 0.06, 0.22, 0x2a7f78, 0, 0.04, 0); box(0.44, 0.015, 0.24, 0x1d5a55, 0, 0.075, 0);
+      for (const x of [-0.17, 0.17]) { box(0.045, 0.34, 0.045, 0x3a3d45, x, 0.24, 0); sph(0.03, 0x5fd0c8, x, 0.43, 0, { em: 0x2a9a90 }); }
+      box(0.3, 0.26, 0.014, 0x5fd0c8, 0, 0.24, 0, { em: 0x1d8a82 }); box(0.3, 0.012, 0.016, 0xc8fffa, 0, 0.25, 0, { em: 0xc8fffa }); box(0.012, 0.26, 0.016, 0xc8fffa, 0, 0.24, 0, { em: 0xc8fffa }); break;
+    case 'jumppad':
+      box(0.44, 0.07, 0.44, 0x2a6a24, 0, 0.04, 0); box(0.38, 0.03, 0.38, 0x6be35a, 0, 0.085, 0, { em: 0x2a8a20 });
+      for (const y of [0.0, 0.1]) { box(0.17, 0.02, 0.035, 0xffffff, -0.07, 0.11, -0.1 + y, { ry: 0.6, em: 0xcfffc0 }); box(0.17, 0.02, 0.035, 0xffffff, 0.07, 0.11, -0.1 + y, { ry: -0.6, em: 0xcfffc0 }); }
+      for (const [x, z] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) box(0.04, 0.08, 0.04, 0x3a3d45, x, 0.06, z); break;
+    /* ----- tools and melee ----- */
+    case 'pickaxe': case 'axe': case 'sword': {
+      const t = Math.max(0, Math.min(4, stack.r | 0)), mat = TIER_COL[t], dk = TIER_DK[t], em = TIER_EM[t] || 0;
+      if (id === 'sword') {
+        box(0.5, 0.07, 0.016, mat, 0.34, 0.09, 0, { em: em }); box(0.5, 0.025, 0.02, mul(mat, 1.25), 0.34, 0.09, 0, { em: em });
+        box(0.08, 0.07, 0.016, mat, 0.62, 0.09, 0, { em: em, s: [1, 0.7, 1] }); box(0.05, 0.05, 0.016, mat, 0.66, 0.09, 0, { rz: 0.78, em: em, s: [1, 0.7, 1] });
+        box(0.045, 0.05, 0.22, dk, 0.07, 0.09, 0); box(0.03, 0.05, 0.05, dk, 0.07, 0.09, 0.12); box(0.03, 0.05, 0.05, dk, 0.07, 0.09, -0.12);
+        cyl(0.026, 0.026, 0.16, WOOD, -0.04, 0.09, 0, { rz: Math.PI / 2 }); for (const x of [-0.08, -0.02]) cyl(0.028, 0.028, 0.012, WOOD2, x, 0.09, 0, { rz: Math.PI / 2 });
+        sph(0.04, dk, -0.14, 0.09, 0, {});
+      } else {
+        box(0.64, 0.045, 0.045, WOOD, 0, 0.09, 0); box(0.03, 0.05, 0.05, WOOD2, -0.3, 0.09, 0); for (const x of [-0.18, -0.11]) box(0.02, 0.05, 0.05, WOOD2, x, 0.09, 0);
+        if (id === 'pickaxe') {
+          box(0.07, 0.06, 0.34, mat, 0.28, 0.09, 0, { em: em }); box(0.04, 0.062, 0.34, mul(mat, 1.2), 0.28, 0.09, 0, { em: em });
+          for (const s of [-1, 1]) { box(0.07, 0.05, 0.12, mat, 0.25, 0.09, s * 0.2, { ry: -s * 0.45, em: em }); box(0.05, 0.04, 0.07, dk, 0.22, 0.09, s * 0.28, { ry: -s * 0.8 }); }
+          box(0.09, 0.07, 0.07, dk, 0.28, 0.09, 0);
+        } else {
+          box(0.13, 0.05, 0.2, mat, 0.27, 0.09, 0, { em: em }); box(0.06, 0.052, 0.2, mul(mat, 1.2), 0.27, 0.09, 0, { em: em });
+          box(0.07, 0.05, 0.12, mat, 0.34, 0.09, 0.14, { ry: 0.5, em: em }); box(0.07, 0.05, 0.12, mat, 0.34, 0.09, -0.14, { ry: -0.5, em: em });
+          box(0.025, 0.054, 0.3, SIL, 0.38, 0.09, 0, { em: 0x3a4250 }); box(0.07, 0.07, 0.06, dk, 0.2, 0.09, 0); box(0.05, 0.05, 0.16, dk, -0.1, 0.09, 0, {});
+        }
+      }
+      g.rotation.z = 0; sc = 1.15; break;
+    }
+    default:
+      if (it.type === 'block') { const b = dropBlockParts(id, it, box, cyl, sph, mul); if (!b) return null; sc = 1.25; break; }
+      return null;
+  }
+  g.scale.set(sc, sc, sc); return g;
+}
+/* placeable blocks: a small chipped block, or a tiny version of the station / trap */
+function dropBlockParts(id, it, box, cyl, sph, mul) {
+  const c = new THREE.Color(it.color).getHex(), hi = mul(c, 1.18), lo = mul(c, 0.72), WOOD = 0x8a5a2e, WOOD2 = 0x6b4420, DK = 0x23252d;
+  switch (id) {
+    case 'bench':
+      box(0.44, 0.06, 0.3, 0xb98648, 0, 0.26, 0); box(0.44, 0.012, 0.012, WOOD2, 0, 0.292, 0.06); box(0.44, 0.012, 0.012, WOOD2, 0, 0.292, -0.06);
+      for (const [x, z] of [[-0.19, -0.12], [0.19, -0.12], [-0.19, 0.12], [0.19, 0.12]]) box(0.05, 0.24, 0.05, 0x82552c, x, 0.12, z);
+      box(0.36, 0.03, 0.04, 0x82552c, 0, 0.1, 0.12); box(0.12, 0.04, 0.05, 0x9aa0aa, -0.1, 0.32, 0.02); box(0.05, 0.09, 0.05, WOOD, -0.1, 0.34, 0.02); break;
+    case 'furnace':
+      box(0.36, 0.36, 0.3, 0x8c8f98, 0, 0.18, 0); box(0.38, 0.03, 0.32, 0x6c6f78, 0, 0.375, 0); box(0.14, 0.12, 0.1, 0x6c6f78, -0.08, 0.45, -0.04);
+      box(0.2, 0.14, 0.02, 0x1a1a1e, 0, 0.17, 0.155); box(0.15, 0.07, 0.022, 0xff7a2a, 0, 0.14, 0.157); box(0.1, 0.04, 0.024, 0xffd070, 0, 0.13, 0.158);
+      for (const y of [0.07, 0.3]) box(0.37, 0.012, 0.31, 0x707380, 0, y, 0); break;
+    case 'forge':
+      box(0.42, 0.22, 0.32, 0x3a3d46, 0, 0.11, 0); box(0.44, 0.03, 0.34, 0x2a2d35, 0, 0.235, 0); box(0.3, 0.06, 0.14, 0x6a6e78, 0, 0.3, 0); box(0.14, 0.04, 0.1, 0x6a6e78, 0.2, 0.31, 0, { rz: -0.2 });
+      box(0.3, 0.012, 0.15, 0x9aa0aa, 0, 0.332, 0); box(0.26, 0.05, 0.02, 0xff7a2a, 0, 0.12, 0.165); box(0.2, 0.025, 0.022, 0xffd070, 0, 0.115, 0.167); break;
+    case 'bouncer':
+      box(0.44, 0.07, 0.44, 0x2a6a24, 0, 0.04, 0); box(0.38, 0.03, 0.38, 0x6be35a, 0, 0.085, 0, { em: 0x2a8a20 });
+      box(0.17, 0.02, 0.035, 0xffffff, -0.07, 0.11, 0, { ry: 0.6, em: 0xcfffc0 }); box(0.17, 0.02, 0.035, 0xffffff, 0.07, 0.11, 0, { ry: -0.6, em: 0xcfffc0 }); break;
+    case 'spikes': {
+      box(0.38, 0.05, 0.38, 0x6a6e78, 0, 0.03, 0);
+      for (const [x, z, h] of [[0, 0, 0.26], [-0.12, -0.12, 0.2], [0.12, -0.12, 0.2], [-0.12, 0.12, 0.2], [0.12, 0.12, 0.2], [0, -0.14, 0.14], [0, 0.14, 0.14], [-0.14, 0, 0.14], [0.14, 0, 0.14]]) cyl(0, 0.04, h, 0xc8ccd8, x, 0.05 + h / 2, z, {});
+      break;
+    }
+    case 'sapling':
+      box(0.28, 0.07, 0.28, 0x8a5a3a, 0, 0.035, 0); box(0.28, 0.02, 0.28, 0x6a8a3a, 0, 0.075, 0);
+      cyl(0.016, 0.022, 0.22, 0x6b4420, 0, 0.19, 0); sph(0.1, 0x4fae3f, 0, 0.35, 0, { s: [1, 0.8, 1] }); sph(0.07, 0x6bc858, 0.08, 0.28, 0.04, {}); sph(0.07, 0x3f9a30, -0.08, 0.3, -0.03, {}); break;
+    case 'lamp':
+      box(0.28, 0.28, 0.28, 0xffe08a, 0, 0.17, 0, { em: 0xc89a30 }); box(0.2, 0.2, 0.3, 0xfff4c0, 0, 0.17, 0, { em: 0xe8c860 }); box(0.3, 0.2, 0.2, 0xfff4c0, 0, 0.17, 0, { em: 0xe8c860 });
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.04, 0.3, 0.04, 0x8a6a2a, x * 0.14, 0.17, z * 0.14); box(0.3, 0.03, 0.3, 0x8a6a2a, 0, 0.015, 0); box(0.3, 0.03, 0.3, 0x8a6a2a, 0, 0.325, 0); break;
+    case 'glass':
+      box(0.28, 0.28, 0.28, 0xbfe9ff, 0, 0.17, 0, { em: 0x3a5a70 }); box(0.2, 0.2, 0.3, 0xe8f8ff, 0, 0.17, 0, { em: 0x6a8aa0 });
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.03, 0.3, 0.03, 0x8ab8d8, x * 0.14, 0.17, z * 0.14); for (const y of [0.025, 0.315]) box(0.3, 0.03, 0.3, 0x8ab8d8, 0, y, 0); break;
+    case 'scaffold':
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.04, 0.34, 0.04, 0xc79a5a, x * 0.15, 0.18, z * 0.15);
+      for (const y of [0.05, 0.18, 0.31]) { box(0.34, 0.03, 0.04, 0xa87a3a, 0, y, 0.15); box(0.34, 0.03, 0.04, 0xa87a3a, 0, y, -0.15); box(0.04, 0.03, 0.34, 0xa87a3a, 0.15, y + 0.03, 0); box(0.04, 0.03, 0.34, 0xa87a3a, -0.15, y + 0.03, 0); }
+      break;
+    default:
+      /* dirt, sand, wood, stone, metal and alloy blocks: a chipped, faceted block with a bright top face */
+      box(0.3, 0.3, 0.3, c, 0, 0.17, 0); box(0.3, 0.05, 0.3, hi, 0, 0.315, 0); box(0.31, 0.06, 0.31, lo, 0, 0.055, 0);
+      box(0.1, 0.1, 0.012, lo, -0.06, 0.2, 0.156); box(0.07, 0.07, 0.012, hi, 0.07, 0.14, 0.156); box(0.012, 0.09, 0.09, lo, 0.156, 0.22, -0.05); box(0.012, 0.06, 0.06, hi, -0.156, 0.12, 0.06);
+      box(0.06, 0.06, 0.06, hi, 0.16, 0.32, 0.16, { ry: 0.5 }); box(0.05, 0.05, 0.05, lo, -0.17, 0.05, 0.17, { ry: 0.3 });
+  }
+  return true;
+}
 function dropMeshFor(stack, detail) {
   const g = new THREE.Group(), it = ITEM[stack.id], col = new THREE.Color(isGearType(it.type) ? RARITY[stack.r || 0].color : it.color);
   const gear = isGearType(it.type);
-  let m = detail && it.type === 'gun' ? dropGunModel(stack) : (detail && it.type === 'ammo' ? dropAmmoModel(stack) : null);
-  if (!m) m = new THREE.Mesh(boxGeo(gear ? 0.62 : 0.34, gear ? 0.2 : 0.34, gear ? 0.2 : 0.34), new THREE.MeshLambertMaterial({ color: col, emissive: col.clone().multiplyScalar(0.35) }));
-  else { const pad = new THREE.Mesh(boxGeo(it.type === 'ammo' ? 0.7 : 1.0, 0.02, it.type === 'ammo' ? 0.45 : 0.5), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, fog: false, depthWrite: false })); pad.position.y = 0.12; g.add(pad); g.userData.detail = true; }
+  let m = detail && it.type === 'gun' ? dropGunModel(stack) : (detail && it.type === 'ammo' ? dropAmmoModel(stack) : (detail ? dropItemModel(stack) : null));
+  if (!m) { m = new THREE.Mesh(boxGeo(gear ? 0.62 : 0.34, gear ? 0.2 : 0.34, gear ? 0.2 : 0.34), new THREE.MeshLambertMaterial({ color: col, emissive: col.clone().multiplyScalar(0.35) })); if (detail) g.userData.detail = true; }
+  else { const flat = it.type === 'gun' || it.type === 'ammo', pad = new THREE.Mesh(flat ? boxGeo(it.type === 'ammo' ? 0.7 : 1.0, 0.02, it.type === 'ammo' ? 0.45 : 0.5) : cylGeo(gear ? 0.5 : 0.32, gear ? 0.5 : 0.32, 0.02), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, fog: false, depthWrite: false })); pad.position.y = 0.12; g.add(pad); g.userData.detail = true; }
   m.position.y = 0.3; g.add(m);
   if (gear || (stack.r || 0) > 0 || it.type === 'gadget') { const bc = new THREE.Color(gear ? RARITY[stack.r || 0].color : it.color); const beam = new THREE.Mesh(boxGeo(0.12, 3.2, 0.12), new THREE.MeshBasicMaterial({ color: bc, transparent: true, opacity: 0.28, fog: false, depthWrite: false })); beam.position.y = 1.7; g.add(beam); }
   g.userData.m = m; return g;
@@ -2864,7 +3118,7 @@ function updateDropMeshes() {
   const P = G.P; if (!P) return;
   for (const d of G.drops) {
     const near = Math.abs(d.x - P.x) < 52 && Math.abs(d.z - P.z) < 52 && Math.abs(d.y - P.y) < 70;
-    const hd = Math.hypot(d.x - P.x, d.z - P.z), dk = ITEM[d.stack.id].type === 'ammo' ? 16 : 32, wantDetail = d.stack && (ITEM[d.stack.id].type === 'gun' || ITEM[d.stack.id].type === 'ammo') && hd < (d.mesh && d.mesh.userData.detail ? dk + 8 : dk);
+    const hd = Math.hypot(d.x - P.x, d.z - P.z), dk = ITEM[d.stack.id].type === 'ammo' ? 16 : ITEM[d.stack.id].type === 'gun' ? 32 : 22, wantDetail = d.stack && ITEM[d.stack.id].type !== 'special' && hd < (d.mesh && d.mesh.userData.detail ? dk + 8 : dk);
     if (d.mesh && near && !!d.mesh.userData.detail !== wantDetail) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
     if (near && !d.mesh) { d.mesh = dropMeshFor(d.stack, wantDetail); G.rend.scene.add(d.mesh); }
     else if (!near && d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
@@ -4897,7 +5151,7 @@ const UI = {
     res.innerHTML = BUILD_MATS.map((m, i) => '<span class="' + (P.buildMode && i === P.mat ? 'sel' : '') + '" style="--c:' + m.color + '"><b></b>' + (P.creative ? '∞' : invCount(P.inv, m.item)) + '</span>').join('');
     if (!s || P.buildMode) { a.innerHTML = P.buildMode ? '' : ''; a.style.display = 'none'; return; }
     const it = ITEM[s.id]; a.style.display = ''; let h = '<div class="an" style="color:' + itemColor(s) + '">' + esc(itemName(s)) + '</div>';
-    if (it.type === 'gun') { const st = gunStats(s); if (st.magMax) { const rs = P.infAmmo ? '∞' : invCount(P.inv, st.ammo); h += '<div class="am"><b>' + s.mag + '</b><span>/ ' + st.magMax + '</span><em>' + rs + '</em></div>'; } else h += '<div class="am"><b>' + (P.infAmmo ? '∞' : invCount(P.inv, st.ammo)) + '</b><span>' + ITEM[st.ammo].name + '</span></div>'; const ws = weaponState(P); if (ws.reload > 0) h += '<div class="rl"><i style="width:' + (100 * (1 - ws.reload / Math.max(0.1, gunStats(s).reloadT))) + '%"></i></div>'; }
+    if (it.type === 'gun') { const st = gunStats(s); if (st.magMax) { const rs = P.infAmmo ? '∞' : invCount(P.inv, st.ammo); h += '<div class="am"><b>' + s.mag + '</b><span>/ ' + st.magMax + '</span><em><img class="ai" src="' + iconURL(mkStack(st.ammo, 1), 32) + '">' + rs + '</em></div>'; } else h += '<div class="am"><b>' + (P.infAmmo ? '∞' : invCount(P.inv, st.ammo)) + '</b><span><img class="ai" src="' + iconURL(mkStack(st.ammo, 1), 32) + '">' + ITEM[st.ammo].name + '</span></div>'; const ws = weaponState(P); if (ws.reload > 0) h += '<div class="rl"><i style="width:' + (100 * (1 - ws.reload / Math.max(0.1, gunStats(s).reloadT))) + '%"></i></div>'; }
     else if (stackMax(s) > 1) h += '<div class="am"><b>' + s.n + '</b></div>';
     a.innerHTML = h;
   }
