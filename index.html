@@ -983,12 +983,13 @@ function paintTile(name) {
     case 'chest_top0': case 'chest_top1': case 'chest_top2': case 'chest_top3': case 'chest_open': {
       const k = name === 'chest_side_open' || name === 'chest_open' ? 3 : parseInt(name.slice(-1));
       const band = [[140, 142, 152], [70, 150, 255], [186, 100, 255], [255, 196, 60]][k], dark = [[64, 66, 74], [30, 80, 150], [100, 40, 150], [160, 110, 20]][k];
-      fill([158, 106, 52], 0.05);
+      fill(name.indexOf('open') >= 0 ? [112, 74, 38] : [158, 106, 52], 0.05);
       for (let y = 0; y < 16; y += 4) for (let x = 0; x < 16; x++) set(x, y + 3, jit([112, 74, 36], 0.06));
       rect(0, 0, 16, 2, band); rect(0, 14, 16, 2, band); rect(0, 0, 2, 16, band); rect(14, 0, 2, 16, band); rect(0, 2, 16, 1, dark); rect(0, 13, 16, 1, dark);
-      if (name.startsWith('chest_side')) { rect(6, 5, 4, 5, band); rect(7, 7, 2, 2, [40, 30, 20]); rect(6, 2, 4, 1, dark); }
-      if (name === 'chest_open') { fill([40, 24, 14], 0.1); rect(0, 0, 16, 2, band); rect(0, 14, 16, 2, band); rect(0, 0, 2, 16, band); rect(14, 0, 2, 16, band); blot([255, 220, 120], 0.15, 5); }
-      if (name === 'chest_side_open') { rect(2, 2, 12, 3, [40, 24, 14]); rect(6, 8, 4, 3, band); }
+      if (name.startsWith('chest_side') && name !== 'chest_side_open') { rect(6, 5, 4, 5, band); rect(7, 7, 2, 2, [40, 30, 20]); rect(6, 2, 4, 1, dark); rect(2, 4, 4, 1, [214, 164, 104]); rect(10, 4, 4, 1, [214, 164, 104]); }
+      if (name.startsWith('chest_top') && name !== 'chest_open') { rect(7, 0, 2, 16, dark); rect(5, 5, 6, 6, band); rect(6, 6, 4, 4, dark); rect(7, 7, 2, 2, [240, 230, 190]); rect(2, 2, 3, 1, [214, 164, 104]); }
+      if (name === 'chest_open') { fill([40, 24, 14], 0.1); rect(2, 2, 12, 12, [20, 11, 6]); rect(3, 3, 10, 1, [58, 36, 20]); rect(0, 0, 16, 2, band); rect(0, 14, 16, 2, band); rect(0, 0, 2, 16, band); rect(14, 0, 2, 16, band); rect(0, 0, 16, 1, dark); specks([120, 90, 50], 5); }
+      if (name === 'chest_side_open') { rect(2, 2, 12, 5, [20, 11, 6]); rect(2, 2, 12, 1, [70, 46, 26]); rect(0, 0, 16, 2, dark); rect(5, 9, 6, 2, dark); rect(7, 11, 2, 2, [200, 180, 110]); }
       break;
     }
     case 'bench_top': fill([196, 146, 84], 0.05); rect(0, 0, 16, 1, [120, 80, 40]); rect(0, 15, 16, 1, [120, 80, 40]); rect(0, 0, 1, 16, [120, 80, 40]); rect(15, 0, 1, 16, [120, 80, 40]); rect(3, 4, 4, 8, [150, 160, 176]); rect(9, 3, 4, 3, [90, 60, 36]); rect(9, 8, 4, 4, [210, 70, 60]); break;
@@ -1201,6 +1202,7 @@ class World {
     this.growing = [];
     this.chests = new Map();           // key -> {kind, x,y,z, locked}
     this.opened = new Set();           // chest keys opened (persisted)
+    this.chestCd = new Map();          // chest key -> seconds until it closes and refills
     this.pois = []; this.lootSpots = []; this.mobSpawns = []; this.fortresses = []; this.vaults = []; this.islands = [];
     this.sites = [];
     this.noise = new Noise(this.seed);
@@ -3016,8 +3018,8 @@ function explode(x, y, z, radius, dmg, src, o) {
 function chestAt(x, y, z) { return G.world.chests.get(G.world.key(x, y, z)); }
 function openChest(by, x, y, z) {
   const w = G.world, k = w.key(x, y, z), c = w.chests.get(k); if (!c || w.opened.has(k)) return false;
-  w.opened.add(k);
-  const rng = mulberry32((w.seed ^ (k * 2654435761)) >>> 0), loot = genLoot(c.kind, rng);
+  w.opened.add(k); w.chestCd.set(k, CHEST_CD[c.kind] || 90); c.opens = (c.opens || 0) + 1;
+  const rng = mulberry32(((w.seed ^ (k * 2654435761)) ^ ((c.opens - 1) * 0x9E3779B1)) >>> 0), loot = genLoot(c.kind, rng);
   w.setBlock(x, y, z, BK.chest_open, true); w.edits.set(k, BK.chest_open);
   Snd.play('chest', { x, y, z, vol: 1 });
   if (G.rend) { G.rend.burst(x + 0.5, y + 1, z + 0.5, [0xffe08a, 0x7fc8ff, 0xd27bff, 0xffb52e][c.kind], 18, 4, 0.12, 0.8, 6); G.rend.flash(x + 0.5, y + 1.2, z + 0.5, 3, [0xffe9a0, 0x80c8ff, 0xd890ff, 0xffc040][c.kind], 0.25); }
@@ -3025,6 +3027,18 @@ function openChest(by, x, y, z) {
   if (G.onChest) G.onChest(by, c);
   return true;
 }
+const CHEST_CD = [75, 100, 130, 180]; // seconds a chest stays open/empty before it closes and refills (by tier)
+function chestTick(dt) {
+  const w = G.world, P = G.P; if (!w || !w.chestCd.size) return;
+  for (const [k, t] of w.chestCd) {
+    const nt = t - dt; if (nt > 0) { w.chestCd.set(k, nt); continue; }
+    w.chestCd.delete(k); w.opened.delete(k);
+    const c = w.chests.get(k); if (!c || w.getBlock(c.x, c.y, c.z) !== BK.chest_open) continue;
+    w.setBlock(c.x, c.y, c.z, BK['chest' + c.kind], true); w.edits.delete(k);
+    if (G.rend && P && Math.hypot(P.x - c.x, P.z - c.z) < 40) { G.rend.burst(c.x + 0.5, c.y + 1, c.z + 0.5, [0xffe08a, 0x7fc8ff, 0xd27bff, 0xffb52e][c.kind], 8, 2, 0.08, 0.6, 6); Snd.play('pickup', { x: c.x, y: c.y, z: c.z, vol: 0.25 }); }
+  }
+}
+function chestCdText(k) { const t = Math.max(0, Math.ceil(G.world.chestCd.get(k) || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
 function findChestNear(x, y, z, r) {
   let best = null, bd = r * r; const w = G.world;
   for (const [k, c] of w.chests) { if (w.opened.has(k)) continue; const d = (c.x + 0.5 - x) ** 2 + (c.y + 0.5 - y) ** 2 + (c.z + 0.5 - z) ** 2; if (d < bd) { bd = d; best = c; } }
@@ -3917,7 +3931,7 @@ function playerUpdate(P, dt) {
   // ---- interact ----
   const tgt = playerTarget(P); G.target = tgt;
   G.prompt = null;
-  if (tgt) { const id = tgt.id; if (id >= BK.chest0 && id <= BK.chest3 && !w.opened.has(w.key(tgt.x, tgt.y, tgt.z))) G.prompt = { text: 'Open ' + BD[id].label, c: { x: tgt.x, y: tgt.y, z: tgt.z } }; else if (id === BK.bench || id === BK.furnace || id === BK.forge) G.prompt = { text: 'Use ' + BD[id].label, station: true }; }
+  if (tgt) { const id = tgt.id; if (id >= BK.chest0 && id <= BK.chest3 && !w.opened.has(w.key(tgt.x, tgt.y, tgt.z))) G.prompt = { text: 'Open ' + BD[id].label, c: { x: tgt.x, y: tgt.y, z: tgt.z } }; else if (id === BK.chest_open) { const ck = w.key(tgt.x, tgt.y, tgt.z); if (w.chestCd.has(ck)) G.prompt = { text: 'Chest empty · refills in ' + chestCdText(ck), info: true }; } else if (id === BK.bench || id === BK.furnace || id === BK.forge) G.prompt = { text: 'Use ' + BD[id].label, station: true }; }
   const nd = nearestDrop(P.x, P.y + 0.9, P.z, 3.2, true);
   if (nd) { G.prompt = { text: 'Pick up ' + itemName(nd.stack) + (nd.stack.n > 1 ? ' ×' + nd.stack.n : ''), drop: nd, stack: nd.stack }; }
   if (I.pressed.KeyE) {
@@ -4061,7 +4075,7 @@ function contextHints(P) {
   if (!h.move && G.t > 6) { HUD.hint('move', 'WASD to move, Space to jump, Shift to sprint, mouse to look.'); }
   else if (!h.harvest && tgt && (tgt.id === BK.log || tgt.id === BK.spruce_log)) HUD.hint('harvest', 'Hold the left mouse button on a tree to harvest Wood.');
   else if (!h.inv && invCount(P.inv, 'wood') >= 8) HUD.hint('inv', 'Press Tab to open your inventory and craft a Crafting Table.');
-  else if (!h.chest && G.prompt && G.prompt.c) HUD.hint('chest', 'Press E to open chests. Higher-tier chests glow brighter.');
+  else if (!h.chest && G.prompt && G.prompt.c) HUD.hint('chest', 'Press E to open chests. Higher-tier chests glow brighter. Opened chests close and refill after a cooldown.');
 }
 
 /* ===================== camera ===================== */
@@ -4185,7 +4199,7 @@ async function startSession(mode, opts) {
   else world = new World({ seed: opts.seed != null ? opts.seed : Math.floor(Math.random() * 1e9), cw: size, cd: size, type: mode === 'creative' ? (opts.worldType || 'flat') : 'island' });
   G.world = world; G.worldMeta = { seed: world.seed, cw: world.cw, cd: world.cd, type: world.type };
   await runGenerator(world, p => UI.loading(true, 'Generating world…', p * 0.7));
-  if (sv) { world.applyEdits(sv.edits || []); for (const k of (sv.opened || [])) world.opened.add(k); for (const [k, id] of world.edits) if (id === BK.sapling) world.growing.push({ k, t: rnd(10, 30) }); }
+  if (sv) { world.applyEdits(sv.edits || []); for (const k of (sv.opened || [])) { world.opened.add(k); const ch = world.chests.get(k); if (ch) world.chestCd.set(k, CHEST_CD[ch.kind] || 90); } for (const [k, id] of world.edits) if (id === BK.sapling) world.growing.push({ k, t: rnd(10, 30) }); }
   G.rend.setWorld(world);
   // player
   UI.loading(true, 'Building terrain…', 0.72);
@@ -4498,7 +4512,7 @@ function sessionUpdate(dt) {
     for (let i = G.bots.length - 1; i >= 0; i--) { const b = G.bots[i]; if (b.dead) { G.bots.splice(i, 1); continue; } botUpdate(b, dt); }
     for (let i = G.mobs.length - 1; i >= 0; i--) { const m = G.mobs[i]; if (m.dead) { G.mobs.splice(i, 1); continue; } mobUpdate(m, dt); }
     for (const d of G.dummies) updateDummy(d, dt);
-    updateProjs(dt); updateDrops(dt);
+    updateProjs(dt); updateDrops(dt); chestTick(dt);
     if (G.mode === 'br') { updateZone(dt); eventTick(dt); lowGravFx(dt); }
     survivalTick(dt);
     // dynamic block expiry
@@ -4841,7 +4855,7 @@ const UI = {
     $('scope').classList.toggle('on', !!G.scoped);
     // prompt
     const pr = $('prompt');
-    if (G.prompt && !G.uiOpen && !P.dead) { let t = '<kbd>E</kbd> ' + esc(G.prompt.text); if (G.prompt.stack) { const s = G.prompt.stack; t += '<div class="pt" style="border-color:' + itemColor(s) + '">' + itemTip(s, P.inv[P.sel]) + '</div>'; } if (pr.dataset.k !== t) { pr.innerHTML = t; pr.dataset.k = t; } pr.classList.add('on'); } else pr.classList.remove('on');
+    if (G.prompt && !G.uiOpen && !P.dead) { let t = (G.prompt.info ? '' : '<kbd>E</kbd> ') + esc(G.prompt.text); if (G.prompt.stack) { const s = G.prompt.stack; t += '<div class="pt" style="border-color:' + itemColor(s) + '">' + itemTip(s, P.inv[P.sel]) + '</div>'; } if (pr.dataset.k !== t) { pr.innerHTML = t; pr.dataset.k = t; } pr.classList.add('on'); } else pr.classList.remove('on');
     // using bar
     const ub = $('usebar'); if (P.using) { ub.classList.add('on'); $('usefill').style.width = (100 * (1 - P.using.t / P.using.total)) + '%'; $('usetxt').textContent = ITEM[P.using.id].name; } else ub.classList.remove('on');
     // build panel
@@ -5525,7 +5539,8 @@ function applyBlocks(a) {
       if (w.setBlock(x, y, z, id, true)) {
         const k = w.key(x, y, z); MP.log.set(k, id);
         if (BD[id].hp && B_SOLID[id]) w.hpMap.set(k, BD[id].hp);
-        if (id === BK.chest_open) w.opened.add(k);
+        if (id === BK.chest_open) { w.opened.add(k); const ch = w.chests.get(k); if (ch && !w.chestCd.has(k)) w.chestCd.set(k, CHEST_CD[ch.kind] || 90); }
+        else if (id >= BK.chest0 && id <= BK.chest3) { w.opened.delete(k); w.chestCd.delete(k); }
         if (id === 0) G.rend.blockBurst(x, y, z, old, 3);
       }
     }
@@ -5857,7 +5872,7 @@ btn('aim','AIM','right:16px;bottom:92px;width:50px;height:50px',{
 btn('jump','JUMP','right:92px;bottom:10px;width:54px;height:54px',{on:function(){kd('Space')},off:function(){ku('Space')}});
 btn('crouch','DUCK','right:96px;bottom:72px;width:44px;height:44px',{on:function(){kd('KeyC')},off:function(){ku('KeyC')}});
 btn('reload','R','right:150px;bottom:60px;width:40px;height:40px',{on:function(){tap('KeyR')},show:function(){var it=item();return !lite&&it&&it.type==='gun'&&!G.P.buildMode}});
-btn('inter','E','right:150px;bottom:108px;width:52px;height:52px',{on:function(){tap('KeyE')},show:function(){return !lite&&!!G.prompt}});
+btn('inter','E','right:150px;bottom:108px;width:52px;height:52px',{on:function(){tap('KeyE')},show:function(){return !lite&&!!G.prompt&&!G.prompt.info}});
 btn('build','BUILD','left:12px;bottom:12px;width:46px;height:46px',{on:function(){tap('KeyQ')}});
 var U='top:8px;width:34px;height:30px;right:';
 btn('pause','II',U+'100px',{c:'sq',on:function(){tap('Escape')},show:function(){return true}});
