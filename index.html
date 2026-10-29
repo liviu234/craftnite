@@ -4858,7 +4858,7 @@ boot();
 try { (function () {
 'use strict';
 if (typeof G === 'undefined' || !G.rend || typeof UI === 'undefined') return;
-const MP = { active: false, busy: false, room: null, code: '', me: null, offs: [], remotes: new Map(), q: [], pend: new Map(), log: new Map(), syncQ: [], synced: new Set(), applying: false, noEcho: false, t: 0, tPres: 0, tFlush: 0, tBoard: 0, lastPres: '', respawnAt: 0, conn: true };
+const MP = { joining: false, noMonsters: false, spawnT: 0, active: false, busy: false, room: null, code: '', me: null, offs: [], remotes: new Map(), q: [], pend: new Map(), log: new Map(), syncQ: [], synced: new Set(), applying: false, noEcho: false, t: 0, tPres: 0, tFlush: 0, tBoard: 0, lastPres: '', respawnAt: 0, conn: true };
 const DAY = 1200, num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d || 0), r1 = v => Math.round(v * 10) / 10;
 const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 1000000000; };
 const rcode = () => Math.random().toString(36).slice(2, 7), own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -4867,17 +4867,19 @@ const PROJ = ['arrow', 'bolt', 'grenade', 'smoke', 'snow', 'jumppad'];
 
 /* ---------- ui: menu button, join screen, scoreboard, name tags ---------- */
 const css = document.createElement('style');
-css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);font:600 12px var(--display);letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;white-space:nowrap;pointer-events:none}.mp-tag i{display:block;width:54px;height:4px;margin:2px auto 0;background:#0009;border:1px solid #000}.mp-tag i b{display:block;height:100%;background:#7de86a}#mp-board{position:absolute;top:46px;left:10px;min-width:150px;background:var(--panel);border:1px solid var(--edge);padding:6px 10px;font-size:12px;letter-spacing:.06em;pointer-events:none}#mp-board div{display:flex;justify-content:space-between;gap:14px}#mp-board .me{color:var(--amber)}#mp-board .hd{color:var(--dim);letter-spacing:.14em;font-size:10px;margin-bottom:3px}';
+css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);font:600 12px var(--display);letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;white-space:nowrap;pointer-events:none}.mp-tag i{display:block;width:54px;height:4px;margin:2px auto 0;background:#0009;border:1px solid #000}.mp-tag i b{display:block;height:100%;background:#7de86a}#mp-board{position:absolute;top:46px;left:10px;min-width:150px;background:var(--panel);border:1px solid var(--edge);padding:6px 10px;font-size:12px;letter-spacing:.06em;pointer-events:none}#mp-board div{display:flex;justify-content:space-between;gap:14px}#mp-board .me{color:var(--amber)}#mp-board .hd{color:var(--dim);letter-spacing:.14em;font-size:10px;margin-bottom:3px}.card .mp-opt{display:flex;align-items:flex-start;gap:10px;font-family:var(--body);font-size:15px;letter-spacing:0;text-transform:none;color:var(--ink);cursor:pointer;line-height:1.35}.mp-opt input{margin-top:3px;accent-color:var(--amber);width:18px;height:18px;flex:none}.mp-opt small{display:block;color:var(--dim);font-size:13px}';
 document.head.appendChild(css);
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
 const board = el('div'); board.id = 'mp-board'; board.style.display = 'none'; $('hud').appendChild(board);
 const tags = el('div'); tags.style.cssText = 'position:absolute;inset:0;pointer-events:none'; $('hud').appendChild(tags);
 const st = t => { $('mp-status').textContent = t || ''; };
 let hashCode = ''; try { hashCode = clean((location.hash || '').slice(1)); } catch (e) { }
 $('mp-code').value = hashCode || Store.get('mpcode', '') || rcode();
+$('mp-monsters').checked = Store.get('mpmonsters', true) !== false;
+$('mp-monsters').addEventListener('change', () => { Store.set('mpmonsters', $('mp-monsters').checked); Snd.play('click'); });
 mb.addEventListener('click', () => { Snd.init(); Snd.play('click'); UI.showScreen('mp'); });
 $('mp-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen('main'); });
 $('mp-rand').addEventListener('click', () => { Snd.play('click'); $('mp-code').value = rcode(); });
@@ -4893,12 +4895,13 @@ async function join() {
     const C = window.claude, R = C && C.use ? await C.use('room') : null;
     if (!R) throw new Error('Multiplayer only works in the published version of this page, opened while signed in.');
     MP.room = await R.join('cn-' + code); MP.code = code; st('');
+    MP.noMonsters = !$('mp-monsters').checked; MP.joining = true; Store.set('mpmonsters', !MP.noMonsters);
     await startSession('survival', { seed: hashStr('cn-' + code), size: 12 });
     start();
   } catch (e) {
     console.error(e); st(String(e && e.message || e)); UI.loading(false);
     if (MP.room && !MP.active) { try { MP.room.leave(); } catch (x) { } MP.room = null; }
-  } finally { MP.busy = false; }
+  } finally { MP.busy = false; MP.joining = false; }
 }
 function kit(P) {
   P.inv = makeInv(); P.sel = 0; P.creative = false; P.infAmmo = false; P.hp = 100; P.sh = 0;
@@ -4909,10 +4912,10 @@ function start() {
   const P = G.P, room = MP.room;
   MP.active = true; G.mode = G.modeName = 'mp'; G.freezeTime = true; G.zone = null;
   MP.remotes.clear(); MP.q.length = 0; MP.pend.clear(); MP.log.clear(); MP.syncQ.length = 0; MP.synced.clear(); MP.me = null; MP.lastPres = ''; MP.t = MP.tPres = MP.tFlush = MP.tBoard = 0;
-  kit(P); P.kills = 0; G.kills = 0; P.invuln = 3;
+  kit(P); P.kills = 0; G.kills = 0; P.invuln = 3; MP.spawnT = 2;
   MP.offs = [room.on('ev', onEv), room.onPeers(onPeers), room.onConnection(c => { MP.conn = c; if (c) MP.lastPres = ''; })];
   board.style.display = '';
-  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · share the code with friends', '#6ab0ff');
+  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · share the code with friends' + (MP.noMonsters ? ' · monsters off' : ''), '#6ab0ff');
 }
 function stop() {
   if (!MP.active) return; MP.active = false;
@@ -4925,6 +4928,7 @@ function push(e) { if (MP.q.length < 60 || e.t === 'h' || e.t === 'k') MP.q.push
 
 /* ---------- hooks into the game (wrappers; originals stay intact) ---------- */
 const _clear = clearSession; clearSession = function () { stop(); return _clear.apply(this, arguments); };
+const _mm = makeMob; makeMob = function (type, x, y, z) { const d = MOB_DEF[type]; if (MP.noMonsters && (MP.active || MP.joining) && d && (d.hostile || d.elite)) return null; return _mm.apply(this, arguments); };
 const _tg = targets; targets = function (except) { const o = _tg(except); if (MP.active) for (const r of MP.remotes.values()) if (!r.dead && r !== except && r.model) o.push(r); return o; };
 const _ph = physics; physics = function (e, dt) { if (e.invuln > 0) e.invuln -= dt; return _ph.apply(this, arguments); };
 const _dmg = damageEnt;
@@ -5067,6 +5071,11 @@ function frame(dt) {
   const peers = room.peers();
   if (!MP.me) { const m = peers.find(p => p.sameTab); if (m) MP.me = m.peer; }
   G.tod = (Date.now() / 1000 / DAY + 0.32) % 1;
+  MP.spawnT -= dt;
+  if (MP.spawnT <= 0 && !P.dead) {
+    MP.spawnT = 1.4; spawnTick();
+    if (!MP.noMonsters) for (const g of (G.world.guardSpots || [])) { const gk = g.x + ',' + g.z; if (G.world.guardSpawned.has(gk) || Math.hypot(P.x - g.x, P.z - g.z) >= 60) continue; G.world.guardSpawned.add(gk); for (let i = 0; i < g.n; i++) { const m = makeMob(g.type, g.x + rnd(-2, 2), g.y, g.z + rnd(-2, 2)); if (m) { m.guard = true; G.mobs.push(m); } } }
+  }
   if (P.dead && G.t > MP.respawnAt) respawn();
   const seen = new Set();
   for (const p of peers) {
@@ -5124,34 +5133,60 @@ function frame(dt) {
 try { (function () {
 'use strict';
 if (typeof UI === 'undefined' || typeof Store === 'undefined' || typeof G === 'undefined') return;
-/* every colour is free; hats come with the characters that wear them */
+/* every colour and every hat is free in the Character screen, so any shop character can also be made by hand. The shop sells the ready-made look in one click. */
 const CHARS = [
   { id: 'rookie', name: 'Rookie', tag: 'Starter', price: 0, s: [1, 2, 4, 1, 0] },
   { id: 'scout', name: 'Scout', tag: 'Cap, green jacket', price: 100, s: [2, 3, 3, 3, 1] },
-  { id: 'sage', name: 'Jungle Sage', tag: 'Green skin, forest gear', price: 250, s: [6, 1, 3, 4, 0] },
+  { id: 'miner', name: 'Miner', tag: 'Brown hair, yellow vest', price: 150, s: [2, 1, 2, 3, 0] },
+  { id: 'nomad', name: 'Desert Nomad', tag: 'Dark skin, orange wrap', price: 180, s: [3, 0, 1, 3, 0] },
   { id: 'frost', name: 'Frost Ranger', tag: 'Silver hair, white coat', price: 200, s: [7, 4, 6, 2, 0] },
+  { id: 'pilot', name: 'Sky Pilot', tag: 'Cap, blue flight jacket', price: 220, s: [0, 2, 4, 1, 1] },
+  { id: 'sage', name: 'Jungle Sage', tag: 'Green skin, forest gear', price: 250, s: [6, 1, 3, 4, 0] },
+  { id: 'diver', name: 'Aqua Diver', tag: 'Blue skin, deep sea suit', price: 280, s: [7, 6, 4, 1, 0] },
   { id: 'gladiator', name: 'Gladiator', tag: 'Helmet, red tunic', price: 300, s: [3, 0, 0, 5, 3] },
+  { id: 'toxic', name: 'Toxic', tag: 'Green skin, hazard yellow', price: 320, s: [6, 3, 2, 7, 0] },
+  { id: 'witch', name: 'Swamp Witch', tag: 'Green skin, purple robe', price: 350, s: [6, 7, 5, 7, 0] },
+  { id: 'captain', name: 'Captain', tag: 'Cap, red coat, red hair', price: 380, s: [3, 5, 0, 7, 1] },
   { id: 'inferno', name: 'Inferno', tag: 'Red hair, orange armor', price: 400, s: [2, 5, 1, 5, 0] },
+  { id: 'ninja', name: 'Shadow Ninja', tag: 'All dark', price: 450, s: [1, 0, 7, 7, 0] },
   { id: 'sentinel', name: 'Sentinel', tag: 'Helmet, navy uniform', price: 500, s: [4, 4, 7, 7, 3] },
   { id: 'ghost', name: 'Ghost', tag: 'All white', price: 600, s: [5, 4, 6, 6, 0] },
-  { id: 'royal', name: 'Royal', tag: 'Crown, purple robe', price: 800, s: [1, 3, 5, 0, 2] }
+  { id: 'lava', name: 'Lava Lord', tag: 'Helmet, crimson armor', price: 700, s: [4, 5, 0, 5, 3] },
+  { id: 'royal', name: 'Royal', tag: 'Crown, purple robe', price: 800, s: [1, 3, 5, 0, 2] },
+  { id: 'void', name: 'Void Walker', tag: 'Violet hair, black outfit', price: 1000, s: [7, 7, 7, 7, 0] },
+  { id: 'knight', name: 'Golden Knight', tag: 'Crown, golden armor', price: 1200, s: [5, 3, 2, 6, 2] },
+  { id: 'champion', name: 'Champion', tag: 'Crown, white and blue', price: 1500, s: [0, 6, 6, 6, 2] }
 ];
 const KEYS = ['skin', 'hair', 'shirt', 'pants', 'hat'];
 const coins = () => Math.max(0, Store.get('coins', 0) | 0);
 const ownedList = () => { const o = Store.get('owned', []); return Array.isArray(o) ? o : []; };
 const hasChar = c => c.price === 0 || ownedList().indexOf('char:' + c.id) >= 0;
-const hatOwned = i => i === 0 || ownedList().indexOf('hat:' + i) >= 0 || CHARS.some(c => c.s[4] === i && hasChar(c));
+const hatOwned = i => true;
 const wearing = c => KEYS.every((k, j) => MySkin[k] === c.s[j]);
 
 const css = document.createElement('style');
-css.textContent = '.shop-bal{font-family:var(--display);font-size:30px;color:var(--amber);letter-spacing:.04em}.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;width:min(640px,100%)}.shop-card{background:var(--panel);border:1px solid var(--edge);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}.shop-card.on{border-color:var(--amber)}.shop-card .nm{font-family:var(--display);letter-spacing:.05em;font-size:16px}.shop-card .tg{color:var(--dim);font-size:12px;min-height:2.4em}.shop-fig{display:flex;gap:3px;align-items:center}.shop-fig i{display:block;width:22px;height:22px;border:2px solid #000;outline:1px solid var(--edge)}.shop-fig b{font:700 11px var(--display);color:var(--dim);margin-left:6px;letter-spacing:.06em}.shop-card .btn{width:100%;padding:6px 10px}.shop-card .btn[disabled]{opacity:.5;cursor:default}.chip.locked{opacity:.35;text-decoration:line-through}';
+css.textContent = '.shop-bal{font-family:var(--display);font-size:30px;color:var(--amber);letter-spacing:.04em}.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;width:min(640px,100%)}.shop-card{background:var(--panel);border:1px solid var(--edge);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}.shop-card.on{border-color:var(--amber)}.shop-card .nm{font-family:var(--display);letter-spacing:.05em;font-size:16px}.shop-card .tg{color:var(--dim);font-size:12px;min-height:2.4em}.shop-fig{display:flex;gap:3px;align-items:center}.shop-fig i{display:block;width:22px;height:22px;border:2px solid #000;outline:1px solid var(--edge)}.shop-fig b{font:700 11px var(--display);color:var(--dim);margin-left:6px;letter-spacing:.06em}.shop-card .btn{width:100%;padding:6px 10px}.shop-card .btn[disabled]{opacity:.5;cursor:default}.chip.locked{opacity:.35;text-decoration:line-through}.shop-fig{justify-content:center;background:radial-gradient(ellipse at 50% 100%,#1c2a45,#0d1422 70%);border:1px solid var(--edge);padding:6px 0 2px}.shop-fig canvas{display:block;image-rendering:pixelated}';
 document.head.appendChild(css);
 
 const main = document.querySelector('#scr-main .col'), sb = el('button', 'btn', 'Shop'); sb.id = 'm-shop';
 main.insertBefore(sb, $('m-custom').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-shop'; sec.style.maxWidth = '700px';
-sec.innerHTML = '<h2>Shop</h2><p class="lead">Earn coins at the end of every Battle Royale match. The higher you place, the more you get, plus a bonus for every elimination and for winning. Spend them on new characters. Colors are free: change them any time in Character.</p><div class="card" style="width:min(640px,100%)"><label>Your coins</label><div class="shop-bal" id="shop-bal"></div></div><div id="shop-list" class="shop-grid"></div><div class="col"><button class="btn small" id="shop-back">Back</button></div>';
+sec.innerHTML = '<h2>Shop</h2><p class="lead">Earn coins at the end of every Battle Royale match. The higher you place, the more you get, plus a bonus for every elimination and for winning. Spend them on ready-made characters. Every look here can also be made for free: all colors and hats are unlocked in Character, so the shop is the one-click shortcut.</p><div class="card" style="width:min(640px,100%)"><label>Your coins</label><div class="shop-bal" id="shop-bal"></div></div><div id="shop-list" class="shop-grid"></div><div class="col"><button class="btn small" id="shop-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
+
+/* draws the whole character (same pixel figure as the Character screen) onto a small canvas */
+function portrait(s) {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 124; c.setAttribute('role', 'img'); const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  const u = 7, cx = 64, top = 12, skin = SKIN_TONES[s[0]], hair = HAIR_COLORS[s[1]], shirt = SHIRT_COLORS[s[2]], pants = PANTS_COLORS[s[3]], hat = s[4];
+  const R = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(cx + a * u), Math.round(top + b * u), Math.round(w * u), Math.round(h * u)); };
+  x.fillStyle = 'rgba(0,0,0,0.3)'; x.beginPath(); x.ellipse(cx, top + 15.3 * u, 4 * u, 0.7 * u, 0, 0, TAU); x.fill();
+  R(-1.6, 7.8, 1.5, 7.2, pants); R(0.1, 7.8, 1.5, 7.2, pants); R(-1.6, 14, 1.5, 1, '#222'); R(0.1, 14, 1.5, 1, '#222');
+  R(-2.1, 3.8, 4.2, 4.2, shirt); R(-3.6, 3.8, 1.5, 4.2, shirt); R(2.1, 3.8, 1.5, 4.2, shirt); R(-3.6, 7, 1.5, 1.3, skin); R(2.1, 7, 1.5, 1.3, skin);
+  R(-1.8, 0.4, 3.6, 3.6, skin); R(-1.9, 0.1, 3.8, 1.2, hair); R(-1.9, 0.1, 0.8, 2.6, hair); R(1.1, 0.1, 0.8, 2.2, hair);
+  R(-1.1, 2, 0.7, 0.7, '#1b1b24'); R(0.4, 2, 0.7, 0.7, '#1b1b24'); R(-0.7, 3.1, 1.4, 0.35, 'rgba(120,40,40,0.7)');
+  if (hat === 1) { R(-2.0, -0.3, 4, 1, '#d23b3b'); R(-2.4, 0.4, 1, 0.5, '#a82c2c'); } else if (hat === 2) { R(-1.9, -0.2, 3.8, 1, '#ffc83a'); for (let i = 0; i < 4; i++) R(-1.9 + i * 1.2, -0.9, 0.7, 0.8, '#ffc83a'); } else if (hat === 3) { R(-2.1, -0.4, 4.2, 2.1, '#7a8190'); R(-1.5, 1.4, 3, 0.5, '#1d2028'); }
+  return c;
+}
 
 function label() { sb.textContent = 'Shop · ' + coins() + ' coins'; $('shop-bal').textContent = coins() + ' coins'; }
 function sanitize() { if (!hatOwned(MySkin.hat)) { MySkin.hat = 0; Store.set('skin', MySkin); } }
@@ -5161,10 +5196,7 @@ function render() {
   for (const c of CHARS) {
     const has = hasChar(c), on = wearing(c), card = el('div', 'shop-card' + (on ? ' on' : ''));
     card.appendChild(el('div', 'nm', esc(c.name)));
-    const fig = el('div', 'shop-fig');
-    [SKIN_TONES[c.s[0]], HAIR_COLORS[c.s[1]], SHIRT_COLORS[c.s[2]], PANTS_COLORS[c.s[3]]].forEach(col => { const i = el('i'); i.style.background = col; fig.appendChild(i); });
-    if (c.s[4]) fig.appendChild(el('b', '', esc(HAT_NAMES[c.s[4]]).toUpperCase()));
-    card.appendChild(fig); card.appendChild(el('div', 'tg', esc(c.tag)));
+    const fig = el('div', 'shop-fig'); fig.appendChild(portrait(c.s)); card.appendChild(fig); card.appendChild(el('div', 'tg', esc(c.tag)));
     const b = el('button', 'btn small');
     if (has) {
       b.textContent = on ? 'Equipped' : 'Equip'; b.disabled = on;
@@ -5183,16 +5215,16 @@ function render() {
 sb.addEventListener('click', () => { Snd.init(); Snd.play('click'); render(); UI.showScreen('shop'); });
 $('shop-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen('main'); });
 
-/* hats you do not own yet are locked in the Character screen; colors are never locked */
+/* Character screen: hair and shirt colors are not offered here any more. They come with the characters from the Shop. */
 function lock() {
   const host = $('custom-opts'); if (!host) return;
   for (const row of host.querySelectorAll('.crow2')) {
-    const l = row.querySelector('label'); if (!l || l.textContent !== 'Hat') continue;
-    Array.from(row.querySelectorAll('.chip')).forEach((b, i) => {
-      if (hatOwned(i)) return;
-      const n = b.cloneNode(true); b.replaceWith(n); n.classList.add('locked'); n.title = 'Unlocked by a character in the Shop';
-      n.addEventListener('click', () => { Snd.play('denied'); UI.toastMenu('This hat comes with a character in the Shop.'); });
-    });
+    const l = row.querySelector('label'); if (l && (l.textContent === 'Hair' || l.textContent === 'Shirt')) row.remove();
+  }
+  const rb = Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'Randomize');
+  if (rb) {
+    const n = rb.cloneNode(true); rb.replaceWith(n);
+    n.addEventListener('click', () => { MySkin.skin = rndi(0, 7); MySkin.pants = rndi(0, 7); MySkin.hat = rndi(0, 3); Store.set('skin', MySkin); UI.buildCustomize(); if (UI.drawAvatar) UI.drawAvatar(); Snd.play('click'); });
   }
 }
 const _bc = UI.buildCustomize;
