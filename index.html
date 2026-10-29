@@ -5528,28 +5528,5 @@ function upd(){
   PB.forEach(function(b,i){b.e.classList.toggle('sel',P.piece===i)});
   for(var n in B)B[n].e.style.display=B[n].show()?'flex':'none'}
 setInterval(upd,100);
-/* ---------- enable, defaults, small UI fixes ---------- */
-function enable(){if(isTouch)return;isTouch=true;document.body.classList.add('touch');
-  if(Store.raw('settings')==null){Settings.viewDist=5;saveSettings();try{UI.renderSettings()}catch(e){}}
-  var f=document.querySelector('#scr-main .foot');
-  if(f)f.textContent='Touch controls: left thumb moves, right thumb looks. Hold FIRE to shoot or mine, and tap the buttons for jump, aim, build and bag. Landscape works best.'}
-try{if(matchMedia('(pointer:coarse)').matches)enable()}catch(e){}
-window.addEventListener('touchstart',enable,{capture:true,once:true,passive:true});
-var _h=HUD.hint;HUD.hint=function(id,t){if(isTouch&&id!=='touch')return;return _h.call(HUD,id,t)};
-var cb=document.createElement('button');cb.className='btn small tclose';cb.textContent='Close';
-cb.addEventListener('click',function(){Snd.play('click');UI.closeInv()});$('invleft').appendChild(cb);
-var fb=document.createElement('button');fb.className='btn';fb.id='p-full';fb.textContent='Fullscreen';
-fb.addEventListener('click',function(){Snd.play('click');try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(function(){})}catch(e){}});
-$('p-controls').insertAdjacentElement('afterend',fb);
-['controls-list','controls-list2'].forEach(function(id){var h=$(id);if(h)h.insertAdjacentHTML('afterbegin','<div class="how"><h4>Touch (phone or tablet)</h4><p>Left thumb: floating stick, push to the edge to sprint. Right thumb: look. FIRE shoots, mines or swings and can be dragged to aim. AIM toggles zoom for guns and places blocks otherwise. BUILD switches build mode, then WALL / FLOOR / RAMP / ROOF pick the piece, the material button cycles materials, EDIT changes a piece and FIX repairs it. E appears when you can loot something.</p></div>')});
-})()}catch(e){console.error('touch controls failed to load',e)}
-</script>
-<style>
-/* ===== CRAFTNITE :: mobile / touch layer ===== */
-...
-</style>
-<script>
-/* ===== CRAFTNITE :: mobile touch controls (drop-in) ===== */
-...
-})()}catch(e){console.error('touch controls failed to load',e)}
+
 </script>
