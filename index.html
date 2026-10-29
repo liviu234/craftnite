@@ -2744,37 +2744,108 @@ function cylGeo(rt, rb, h) { const k = rt + ',' + rb + ',' + h; return _cylCache
 function dropAmmoModel(stack) {
   const id = stack.id, g = new THREE.Group();
   const add = (geo, c, x, y, z, rx, ry, rz, em) => { const m = new THREE.Mesh(geo, dgMat(c, em)); m.position.set(x, y, z); if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz; g.add(m); return m; };
-  const box = (w, h, d, c, x, y, z, em) => add(boxGeo(w, h, d), c, x, y, z, 0, 0, 0, em);
-  const BRASS = 0xd4a84a, COP = 0xc87a3a, SIL = 0xcfd5de;
-  const crate = (c, label) => { const dk = new THREE.Color(c).multiplyScalar(0.55).getHex(); box(0.44, 0.1, 0.28, dk, 0, 0.05, 0); box(0.46, 0.025, 0.3, c, 0, 0.1, 0); box(0.2, 0.012, 0.12, label, 0, 0.106, 0.13 * 0 + 0.0); };
-  const rounds = (r, h, tipH, tipCol, cols, rows, sp, baseY, caseCol) => {
-    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
-      const x = (i - (cols - 1) / 2) * sp, z = (j - (rows - 1) / 2) * sp;
-      add(cylGeo(r, r, h), caseCol || BRASS, x, baseY + h / 2, z);
-      add(cylGeo(0, r * 0.95, tipH), tipCol, x, baseY + h + tipH / 2, z);
-    }
+  const box = (w, h, d, c, x, y, z, rx, ry, rz, em) => add(boxGeo(w, h, d), c, x, y, z, rx, ry, rz, em);
+  const cyl = (rt, rb, h, c, x, y, z, rx, ry, rz, em) => add(cylGeo(rt, rb, h), c, x, y, z, rx, ry, rz, em);
+  const BRASS = 0xd4a84a, BRASS2 = 0xb98a34, COP = 0xc87a3a, SIL = 0xcfd5de, STEEL = 0x8b93a3, DK = 0x23252d, CREAM = 0xf4f0e0, INK = 0x2b2b30;
+  const mul = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
+  /* open ammo crate: walls, trim, foam insert, label, stripe, clasp and a lid flap swung open at the back */
+  const crate = (w, d, c, accent) => {
+    const dk = mul(c, 0.5), md = mul(c, 0.8);
+    box(w, 0.03, d, dk, 0, 0.015, 0);
+    for (const z of [-1, 1]) box(w, 0.1, 0.02, md, 0, 0.08, z * (d / 2 - 0.01));
+    for (const x of [-1, 1]) box(0.02, 0.1, d - 0.04, md, x * (w / 2 - 0.01), 0.08, 0);
+    for (const z of [-1, 1]) box(w + 0.02, 0.014, 0.034, c, 0, 0.137, z * (d / 2 - 0.012));
+    for (const x of [-1, 1]) box(0.034, 0.014, d, c, x * (w / 2 - 0.012), 0.137, 0);
+    for (const x of [-1, 1]) for (const z of [-1, 1]) box(0.03, 0.12, 0.03, c, x * (w / 2 - 0.008), 0.08, z * (d / 2 - 0.008));
+    box(w - 0.05, 0.03, d - 0.05, 0x2a2d35, 0, 0.09, 0);
+    box(0.22, 0.075, 0.008, CREAM, 0, 0.08, d / 2 + 0.004);
+    box(0.22, 0.016, 0.009, accent, 0, 0.108, d / 2 + 0.005);
+    for (const [y, ww] of [[0.088, 0.1], [0.072, 0.14], [0.058, 0.06]]) box(ww, 0.007, 0.009, INK, -0.02, y, d / 2 + 0.005);
+    box(0.03, 0.04, 0.012, STEEL, 0, 0.125, d / 2 + 0.012);
+    for (const x of [-1, 1]) box(0.009, 0.07, 0.12, accent, x * (w / 2 + 0.004), 0.08, 0);
+    const flap = box(w, 0.014, 0.17, c, 0, 0.14 + 0.085 * 0.93, -d / 2 - 0.085 * 0.36, 1.2);
+    box(w - 0.04, 0.016, 0.13, accent, 0, 0.14 + 0.085 * 0.93 + 0.004, -d / 2 - 0.085 * 0.36 - 0.004, 1.2);
   };
-  if (id === 'ammo_l') { crate(0xffd45a, 0xfff3c0); rounds(0.02, 0.06, 0.035, COP, 5, 2, 0.075, 0.1); add(cylGeo(0.02, 0.02, 0.06), BRASS, 0.3, 0.03, 0.12, 0, 0, Math.PI / 2); add(cylGeo(0, 0.019, 0.035), COP, 0.35, 0.03, 0.12, 0, 0, -Math.PI / 2); }
-  else if (id === 'ammo_m') { crate(0x8ee06a, 0xe6ffd8); rounds(0.026, 0.1, 0.06, SIL, 4, 2, 0.095, 0.1); add(cylGeo(0.026, 0.026, 0.1), BRASS, 0.3, 0.026, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0, 0.025, 0.06), SIL, 0.38, 0.026, 0.1, 0, 0, -Math.PI / 2); }
-  else if (id === 'ammo_h') { crate(0xff6a5a, 0xffd0c8); rounds(0.036, 0.14, 0.09, 0x2a2d35, 3, 2, 0.12, 0.1, 0xb0b6c2); add(cylGeo(0.036, 0.036, 0.14), 0xb0b6c2, 0.32, 0.036, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0, 0.035, 0.09), 0x2a2d35, 0.43, 0.036, 0.1, 0, 0, -Math.PI / 2); }
-  else if (id === 'shells') {
-    crate(0xff9a3a, 0xffe2c0);
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { const x = (i - 1.5) * 0.1, z = (j - 0.5) * 0.1; add(cylGeo(0.038, 0.038, 0.1), 0xd23a2a, x, 0.1 + 0.05, z); add(cylGeo(0.04, 0.04, 0.035), BRASS, x, 0.1 + 0.0175, z); add(cylGeo(0.03, 0.038, 0.012), 0xa82c20, x, 0.1 + 0.106, z); }
-    add(cylGeo(0.038, 0.038, 0.1), 0xd23a2a, 0.34, 0.038, 0.1, 0, 0, Math.PI / 2); add(cylGeo(0.04, 0.04, 0.035), BRASS, 0.3, 0.038, 0.1, 0, 0, Math.PI / 2);
-  }
-  else if (id === 'arrow' || id === 'bolt') {
-    const arrow = id === 'arrow', L = arrow ? 0.7 : 0.46, shaft = arrow ? 0xd9c7a0 : 0x9fb4c8, tip = arrow ? 0xcfd5de : 0xe0e6ee, vane = arrow ? 0xe04a3a : 0x667788;
-    const offs = [[0, 0.06, 0], [0.0, 0.06, 0.07], [0, 0.06, -0.07], [0, 0.12, 0.035], [0, 0.12, -0.035]];
-    offs.forEach((o, k) => {
-      const dx = (k % 2 ? 0.03 : -0.02);
-      add(cylGeo(0.012, 0.012, L), shaft, dx, o[1], o[2], 0, 0, Math.PI / 2);
-      add(cylGeo(0, 0.03, 0.09), tip, dx + L / 2 + 0.045, o[1], o[2], 0, 0, -Math.PI / 2);
-      for (const a of [0, 1]) box(arrow ? 0.14 : 0.1, 0.05, 0.008, vane, dx - L / 2 + 0.07, o[1], o[2], 0).rotation.x = a ? Math.PI / 2 : 0;
-    });
-    box(0.035, 0.2, 0.2, 0x6b4420, -0.05, 0.09, 0); // tie band
-    if (!arrow) box(0.06, 0.2, 0.2, 0x3a4350, 0.1, 0.09, 0);
-  }
-  else return null;
+  /* a standing cartridge: case, rim ring, bottleneck, jacketed bullet, coloured tip */
+  const round = (x, y, z, o) => {
+    cyl(o.r, o.r, o.h, o.caseCol || BRASS, x, y + o.h / 2, z);
+    cyl(o.r * 1.14, o.r * 1.14, 0.012, BRASS2, x, y + 0.006, z);
+    let top = y + o.h;
+    if (o.neck) { cyl(o.r * 0.72, o.r, 0.028, o.caseCol || BRASS, x, top + 0.014, z); top += 0.028; }
+    const br = o.neck ? o.r * 0.72 : o.r * 0.94;
+    cyl(br, br, o.bh, o.bulCol, x, top + o.bh / 2, z); top += o.bh;
+    cyl(0, br, o.th, o.tipCol, x, top + o.th / 2, z);
+    if (o.band) cyl(br * 1.02, br * 1.02, 0.01, o.band, x, y + o.h + (o.neck ? 0.028 : 0) + o.bh * 0.5, z);
+  };
+  const grid = (cols, rows, sp, y, o) => { for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) round((i - (cols - 1) / 2) * sp, y, (j - (rows - 1) / 2) * sp, o); };
+  /* a cartridge lying on the ground */
+  const lay = (x, z, ang, o) => {
+    const L = o.h + (o.neck ? 0.028 : 0) + o.bh + o.th, sub = new THREE.Group(); sub.position.set(x, o.r * 1.05, z); sub.rotation.y = ang; g.add(sub);
+    const sm = (geo, c, px, rx, rz) => { const m = new THREE.Mesh(geo, dgMat(c)); m.position.set(px, 0, 0); m.rotation.z = Math.PI / 2; sub.add(m); return m; };
+    let px = -L / 2; sm(cylGeo(o.r, o.r, o.h), o.caseCol || BRASS, px + o.h / 2); sm(cylGeo(o.r * 1.14, o.r * 1.14, 0.012), BRASS2, px + 0.006); px += o.h;
+    if (o.neck) { sm(cylGeo(o.r * 0.72, o.r, 0.028), o.caseCol || BRASS, px + 0.014); px += 0.028; }
+    const br = o.neck ? o.r * 0.72 : o.r * 0.94; sm(cylGeo(br, br, o.bh), o.bulCol, px + o.bh / 2); px += o.bh; sm(cylGeo(br, 0, o.th), o.tipCol, px + o.th / 2);
+  };
+  if (id === 'ammo_l') {
+    const o = { r: 0.021, h: 0.05, bh: 0.02, th: 0.03, bulCol: COP, tipCol: COP };
+    crate(0.46, 0.28, 0xffd45a, 0xc99a1a); grid(4, 2, 0.09, 0.105, o);
+    lay(0.33, 0.1, 0.5, o); lay(0.31, -0.06, -0.3, o); lay(0.36, 0.02, 1.2, o);
+  } else if (id === 'ammo_m') {
+    const o = { r: 0.027, h: 0.085, bh: 0.045, th: 0.045, neck: true, bulCol: 0xb98a34, tipCol: SIL, band: 0x3a7a2a };
+    crate(0.46, 0.28, 0x8ee06a, 0x3a7a2a); grid(4, 2, 0.1, 0.105, o);
+    lay(0.35, 0.09, 0.4, o); lay(0.33, -0.07, -0.5, o);
+  } else if (id === 'ammo_h') {
+    const o = { r: 0.037, h: 0.125, bh: 0.07, th: 0.06, neck: true, caseCol: 0xb0b6c2, bulCol: 0x4a4e58, tipCol: 0x2a2d35, band: 0xd23a2a };
+    crate(0.46, 0.28, 0xff6a5a, 0x9a2418); grid(3, 2, 0.14, 0.105, o);
+    lay(0.37, 0.07, 0.3, o);
+  } else if (id === 'shells') {
+    crate(0.46, 0.28, 0xff9a3a, 0xa8561a);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+      const x = (i - 1.5) * 0.105, z = (j - 0.5) * 0.11, y = 0.105;
+      cyl(0.04, 0.04, 0.034, BRASS, x, y + 0.017, z); cyl(0.046, 0.046, 0.007, BRASS2, x, y + 0.0035, z);
+      cyl(0.038, 0.038, 0.07, 0xd23a2a, x, y + 0.034 + 0.035, z); cyl(0.039, 0.039, 0.01, CREAM, x, y + 0.075, z);
+      cyl(0.027, 0.038, 0.016, 0xa82c20, x, y + 0.104 + 0.008, z); cyl(0.022, 0.022, 0.004, 0x7a1c14, x, y + 0.122, z);
+    }
+    for (const [x, z, a] of [[0.34, 0.08, 0.4], [0.32, -0.07, -0.6]]) {
+      const sub = new THREE.Group(); sub.position.set(x, 0.04, z); sub.rotation.y = a; g.add(sub);
+      const sm = (geo, c, px) => { const m = new THREE.Mesh(geo, dgMat(c)); m.position.set(px, 0, 0); m.rotation.z = Math.PI / 2; sub.add(m); };
+      sm(cylGeo(0.04, 0.04, 0.034), BRASS, -0.06); sm(cylGeo(0.046, 0.046, 0.007), BRASS2, -0.0785); sm(cylGeo(0.038, 0.038, 0.07), 0xd23a2a, -0.008); sm(cylGeo(0.027, 0.038, 0.016), 0xa82c20, 0.035);
+    }
+  } else if (id === 'arrow') {
+    const L = 0.72, shaft = 0xd9c7a0, vane = 0xe04a3a;
+    const arrowAt = (x, y, z, ang, Ls) => {
+      const sub = new THREE.Group(); sub.position.set(x, y, z); sub.rotation.y = ang; g.add(sub);
+      const sm = (geo, c, px, py, pz, rx, rz) => { const m = new THREE.Mesh(geo, dgMat(c)); m.position.set(px, py || 0, pz || 0); if (rx) m.rotation.x = rx; m.rotation.z = rz == null ? 0 : rz; sub.add(m); return m; };
+      sm(cylGeo(0.011, 0.011, Ls), shaft, 0, 0, 0, 0, Math.PI / 2);
+      sm(cylGeo(0.016, 0.016, 0.02), 0x3a3d45, -Ls / 2 + 0.01, 0, 0, 0, Math.PI / 2);
+      sm(cylGeo(0, 0.026, 0.085), 0xcfd5de, Ls / 2 + 0.04, 0, 0, 0, -Math.PI / 2);
+      sm(cylGeo(0.027, 0.027, 0.01), 0x6b7280, Ls / 2 - 0.004, 0, 0, 0, Math.PI / 2);
+      for (let k = 0; k < 3; k++) sm(boxGeo(0.15, 0.05, 0.006), vane, -Ls / 2 + 0.11, 0, 0, k * Math.PI / 3, 0);
+    };
+    const rows = [[0, 0.04, -0.07], [0, 0.04, 0.0], [0, 0.04, 0.07], [0, 0.098, -0.035], [0, 0.098, 0.035]];
+    rows.forEach((r, k) => arrowAt((k % 2 ? 0.03 : -0.02), r[1] + 0.02, r[2], 0, L));
+    for (const x of [-0.12, 0.2]) { box(0.04, 0.17, 0.2, 0x6b4420, x, 0.08, 0); box(0.044, 0.02, 0.204, 0x8a5a2e, x, 0.15, 0); }
+    arrowAt(0.0, 0.015, 0.2, 0.25, L * 0.9); arrowAt(0.05, 0.015, -0.2, -0.3, L * 0.9);
+  } else if (id === 'bolt') {
+    const L = 0.44;
+    const boltAt = (x, y, z, ang) => {
+      const sub = new THREE.Group(); sub.position.set(x, y, z); sub.rotation.y = ang; g.add(sub);
+      const sm = (geo, c, px, py, pz, rx, rz) => { const m = new THREE.Mesh(geo, dgMat(c)); m.position.set(px, py || 0, pz || 0); if (rx) m.rotation.x = rx; m.rotation.z = rz == null ? 0 : rz; sub.add(m); return m; };
+      sm(cylGeo(0.016, 0.016, L), 0x9fb4c8, 0, 0, 0, 0, Math.PI / 2);
+      sm(cylGeo(0, 0.034, 0.07), 0xe0e6ee, L / 2 + 0.035, 0, 0, 0, -Math.PI / 2);
+      sm(cylGeo(0.034, 0.034, 0.012), 0x667788, L / 2 - 0.004, 0, 0, 0, Math.PI / 2);
+      for (let k = 0; k < 2; k++) sm(boxGeo(0.09, 0.045, 0.006), 0x55637a, -L / 2 + 0.06, 0, 0, k * Math.PI / 2, 0);
+      sm(boxGeo(0.02, 0.02, 0.02), 0x2a2d35, -L / 2 - 0.005, 0, 0, 0, 0);
+    };
+    const W = 0x8a5a2e, WD = 0x6b4420;
+    box(0.54, 0.03, 0.26, WD, 0, 0.015, 0);
+    for (const z of [-1, 1]) box(0.54, 0.09, 0.02, W, 0, 0.075, z * 0.12);
+    for (const x of [-1, 1]) box(0.02, 0.09, 0.22, W, x * 0.26, 0.075, 0);
+    for (const x of [-0.18, 0.0, 0.18]) box(0.02, 0.02, 0.26, 0x3a4350, x, 0.125, 0);
+    for (let k = 0; k < 5; k++) boltAt(-0.02, 0.06 + (k % 2) * 0.03, (k - 2) * 0.045, 0);
+    box(0.1, 0.05, 0.008, CREAM, 0.0, 0.07, 0.133);
+    boltAt(0.38, 0.016, 0.1, 0.35); boltAt(0.34, 0.016, -0.1, -0.4);
+  } else return null;
   g.scale.set(1.15, 1.15, 1.15); return g;
 }
 function dropMeshFor(stack, detail) {
@@ -2791,7 +2862,7 @@ function updateDropMeshes() {
   const P = G.P; if (!P) return;
   for (const d of G.drops) {
     const near = Math.abs(d.x - P.x) < 52 && Math.abs(d.z - P.z) < 52 && Math.abs(d.y - P.y) < 70;
-    const hd = Math.hypot(d.x - P.x, d.z - P.z), wantDetail = d.stack && (ITEM[d.stack.id].type === 'gun' || ITEM[d.stack.id].type === 'ammo') && hd < (d.mesh && d.mesh.userData.detail ? 38 : 30);
+    const hd = Math.hypot(d.x - P.x, d.z - P.z), dk = ITEM[d.stack.id].type === 'ammo' ? 16 : 32, wantDetail = d.stack && (ITEM[d.stack.id].type === 'gun' || ITEM[d.stack.id].type === 'ammo') && hd < (d.mesh && d.mesh.userData.detail ? dk + 8 : dk);
     if (d.mesh && near && !!d.mesh.userData.detail !== wantDetail) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
     if (near && !d.mesh) { d.mesh = dropMeshFor(d.stack, wantDetail); G.rend.scene.add(d.mesh); }
     else if (!near && d.mesh) { G.rend.scene.remove(d.mesh); d.mesh.traverse(o => { if (o.material && !o.material.userData.shared) o.material.dispose(); }); d.mesh = null; }
