@@ -4853,6 +4853,255 @@ function boot() {
 boot();
 </script>
 <script>
+/* ===== CRAFTNITE :: peer-to-peer rooms (for GitHub Pages and any plain host) =====
+   Same room API the game already uses (on / onPeers / onConnection / presence / emit / peers / leave),
+   built on PeerJS (WebRTC). The first player into a room claims the room's id and becomes the host.
+   Everyone else connects to the host, which relays presence and events. If the host leaves or drops,
+   the remaining players reconnect on their own and one of them becomes the new host. */
+(function (root) {
+  'use strict';
+  var PEER_SRC = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+  var ID_PREFIX = 'craftnite-v1-';
+  var MAX_PLAYERS = 12;
+  var DEFAULT_TIMING = { ping: 4000, dead: 20000, claimTimeout: 12000, connectTimeout: 10000, retryMin: 600, retryMax: 3000, maxRetries: 25, startTries: 3, startDelay: 1500 };
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function mergePresence(base, patch) {
+    var o = Object.assign({}, base);
+    if (patch && typeof patch === 'object') for (var k in patch) { if (patch[k] === null) delete o[k]; else o[k] = patch[k]; }
+    return o;
+  }
+  function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+
+  function makeRoom(Peer, name, say, T) {
+    var hostId = ID_PREFIX + name;
+    var cfg = { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } };
+    var evSubs = {}, peerSubs = [], connSubs = [];
+    var table = new Map(), arr = [], dirty = true, pend = null, flushT = 0;
+    var role = null, peer = null, myId = null, hostConn = null, hostSeen = 0, lastPing = 0, helloWait = null;
+    var conns = new Map(), lastSeen = new Map();
+    var connected = false, closed = false, lost = false, timer = 0, myPresence = {};
+
+    /* ---------- peers table ---------- */
+    function mk(id, presence) {
+      return Object.freeze({ peer: id, by: null, isMe: id === myId, sameTab: id === myId, kind: 'viewer', guest: false, presence: Object.freeze(Object.assign({}, presence)), updatedAt: Date.now() });
+    }
+    function peers() { if (dirty) { arr = Array.from(table.values()); dirty = false; } return arr; }
+    function note(kind, e) {
+      if (!pend) pend = { joined: new Map(), left: new Map(), updated: new Map() };
+      var id = e.peer;
+      if (kind === 'joined') { pend.left.delete(id); pend.joined.set(id, e); }
+      else if (kind === 'left') { if (pend.joined.has(id)) pend.joined.delete(id); else pend.left.set(id, e); pend.updated.delete(id); }
+      else { if (pend.joined.has(id)) pend.joined.set(id, e); else pend.updated.set(id, e); }
+      if (!flushT) flushT = setTimeout(flush, 0);
+    }
+    function flush() {
+      flushT = 0; var p = pend; pend = null; if (!p || closed) return;
+      var ch = { peers: peers(), joined: Array.from(p.joined.values()), left: Array.from(p.left.values()), updated: Array.from(p.updated.values()) };
+      peerSubs.slice().forEach(function (r) { try { r.fn(ch); } catch (e) { console.error(e); } });
+    }
+    function upsert(id, presence) {
+      var old = table.get(id), e = mk(id, presence == null ? (old ? old.presence : {}) : presence);
+      table.set(id, e); dirty = true; note(old ? 'updated' : 'joined', e); return e;
+    }
+    function remove(id) { var old = table.get(id); if (!old) return; table.delete(id); dirty = true; note('left', old); }
+    function clearAll() { Array.from(table.keys()).forEach(remove); }
+    function setConnected(v) { if (connected === v) return; connected = v; connSubs.slice().forEach(function (r) { try { r.fn(v); } catch (e) { console.error(e); } }); }
+
+    /* ---------- events ---------- */
+    function deliver(topic, data, from) {
+      var list = evSubs[topic]; if (!list || !list.length) return;
+      var me = from === myId, msg = { topic: topic, data: data, peer: from, by: null, isMe: me, sameTab: me, kind: 'viewer', guest: false };
+      list.slice().forEach(function (r) { try { r.fn(msg); } catch (e) { console.error(e); } });
+    }
+    function sendTo(c, m) { try { if (c && c.open) c.send(m); } catch (e) { } }
+    function bcast(m, except) { conns.forEach(function (c, id) { if (id !== except) sendTo(c, m); }); }
+
+    /* ---------- host side ---------- */
+    function onGuest(conn) {
+      var id = conn.peer, registered = false;
+      function reg() {
+        if (registered || closed || role !== 'host') return; registered = true;
+        if (conns.size >= MAX_PLAYERS - 1 && !conns.has(id)) { sendTo(conn, { k: 'full' }); setTimeout(function () { try { conn.close(); } catch (e) { } }, 300); return; }
+        var prev = conns.get(id); if (prev && prev !== conn) { try { prev.close(); } catch (e) { } }
+        var snap = peers().map(function (e) { return { peer: e.peer, presence: e.presence }; });
+        conns.set(id, conn); lastSeen.set(id, Date.now());
+        upsert(id, {});
+        sendTo(conn, { k: 'hello', you: id, host: myId, peers: snap });
+        bcast({ k: 'join', peer: id, presence: {} }, id);
+      }
+      conn.on('open', reg); if (conn.open) reg();
+      conn.on('data', function (m) {
+        if (!m || typeof m !== 'object' || conns.get(id) !== conn) return;
+        lastSeen.set(id, Date.now());
+        if (m.k === 'ping') { sendTo(conn, { k: 'pong' }); }
+        else if (m.k === 'pres') { var old = table.get(id); if (!old) return; var np = mergePresence(old.presence, m.d); upsert(id, np); bcast({ k: 'pres', peer: id, presence: np }, id); }
+        else if (m.k === 'ev' && typeof m.topic === 'string') { deliver(m.topic, m.data, id); bcast({ k: 'ev', peer: id, topic: m.topic, data: m.data }, id); }
+        else if (m.k === 'bye') { drop(id, conn); try { conn.close(); } catch (e) { } }
+      });
+      function gone() { drop(id, conn); }
+      conn.on('close', gone); conn.on('error', gone);
+    }
+    function drop(id, conn) {
+      if (conns.get(id) !== conn) return;
+      conns.delete(id); lastSeen.delete(id); remove(id); bcast({ k: 'left', peer: id });
+    }
+    function becomeHost(p) {
+      peer = p; role = 'host'; myId = p.id; lost = false;
+      clearAll(); upsert(myId, myPresence);
+      p.on('connection', onGuest);
+      p.on('error', function (e) { if (!closed) console.warn('peer error', e && e.type); });
+      p.on('disconnected', function () { if (!closed && peer === p) { try { p.reconnect(); } catch (e) { } } });
+      setConnected(true); say('');
+    }
+
+    /* ---------- client side ---------- */
+    function wire(conn) {
+      conn.on('data', function (m) {
+        if (conn !== hostConn || !m || typeof m !== 'object') return;
+        hostSeen = Date.now();
+        switch (m.k) {
+          case 'hello': if (Array.isArray(m.peers)) m.peers.forEach(function (p) { if (p && p.peer !== myId) upsert(p.peer, p.presence || {}); }); if (helloWait) helloWait.ok(); break;
+          case 'full': if (helloWait) helloWait.fail(new Error('This room is full')); break;
+          case 'join': upsert(m.peer, m.presence || {}); break;
+          case 'left': remove(m.peer); break;
+          case 'pres': if (m.peer !== myId) upsert(m.peer, m.presence || {}); break;
+          case 'ev': if (typeof m.topic === 'string') deliver(m.topic, m.data, m.peer); break;
+          case 'bye': hostLost(); break;
+        }
+      });
+      function gone() { if (helloWait && conn === hostConn) helloWait.fail(new Error('Disconnected from the host')); else if (conn === hostConn) hostLost(); }
+      conn.on('close', gone); conn.on('error', gone);
+    }
+    function joinAsClient() {
+      return openPeer(undefined).then(function (p) {
+        return new Promise(function (res, rej) {
+          var done = false, c;
+          function finish(err) {
+            if (done) return; done = true; clearTimeout(to); helloWait = null;
+            if (err) { if (c === hostConn) hostConn = null; try { c && c.close(); } catch (e) { } try { p.destroy(); } catch (e) { } rej(err); }
+            else { peer = p; role = 'client'; myId = p.id; lost = false; hostSeen = lastPing = Date.now(); upsert(myId, myPresence); setConnected(true); say(''); if (Object.keys(myPresence).length) sendTo(c, { k: 'pres', d: myPresence }); res(); }
+          }
+          var to = setTimeout(function () { finish(new Error('The host did not answer')); }, T.connectTimeout);
+          p.on('error', function (e) { if (!done) finish(new Error(e && e.type === 'peer-unavailable' ? 'The host is gone' : 'Connection error: ' + (e && (e.type || e.message)))); });
+          p.on('disconnected', function () { if (!closed && peer === p) { try { p.reconnect(); } catch (e) { } } });
+          helloWait = { ok: function () { finish(null); }, fail: finish };
+          c = p.connect(hostId, { reliable: true, serialization: 'json' }); hostConn = c; wire(c);
+        });
+      });
+    }
+    function hostLost() {
+      if (closed || role !== 'client' || lost) return;
+      lost = true; role = null; setConnected(false);
+      var c = hostConn, p = peer; hostConn = null; peer = null;
+      try { c && c.close(); } catch (e) { } try { p && p.destroy(); } catch (e) { }
+      clearAll(); say('Host lost, reconnecting…');
+      reestablish();
+    }
+    function reestablish() {
+      (async function () {
+        for (var i = 0; i < T.maxRetries && !closed; i++) {
+          await sleep(rand(T.retryMin, T.retryMax)); if (closed) return;
+          try { await establish(); return; } catch (e) { say('Reconnecting… (' + (i + 1) + ')'); }
+        }
+        if (!closed) say('Connection lost. Leave the room and join again.');
+      })();
+    }
+
+    /* ---------- establishing ---------- */
+    function openPeer(id) {
+      return new Promise(function (res, rej) {
+        var p, done = false;
+        var to = setTimeout(function () { if (done) return; done = true; try { p && p.destroy(); } catch (e) { } rej(new Error('Could not reach the matchmaking server')); }, T.claimTimeout);
+        try { p = id ? new Peer(id, cfg) : new Peer(cfg); } catch (e) { clearTimeout(to); return rej(e); }
+        p.on('open', function () { if (done) { try { p.destroy(); } catch (e) { } return; } done = true; clearTimeout(to); res(p); });
+        p.on('error', function (e) {
+          if (done) return; done = true; clearTimeout(to); try { p.destroy(); } catch (x) { }
+          if (id && e && e.type === 'unavailable-id') res(null); else rej(new Error('Could not reach the matchmaking server' + (e && e.type ? ' (' + e.type + ')' : '')));
+        });
+      });
+    }
+    async function establish() {
+      var p = await openPeer(hostId);
+      if (closed) { if (p) try { p.destroy(); } catch (e) { } throw new Error('closed'); }
+      if (p) { becomeHost(p); return; }
+      await joinAsClient();
+    }
+    async function start() {
+      var err;
+      for (var i = 0; i < T.startTries; i++) {
+        try { say(i ? 'Retrying…' : 'Connecting…'); await establish(); timer = setInterval(tick, Math.max(50, Math.min(1000, T.ping / 2))); return api; }
+        catch (e) { err = e; if (i < T.startTries - 1) await sleep(T.startDelay); }
+      }
+      closed = true; throw err;
+    }
+    function tick() {
+      var now = Date.now();
+      if (role === 'host') {
+        lastSeen.forEach(function (t, id) { if (now - t > T.dead) { var c = conns.get(id); drop(id, c); try { c && c.close(); } catch (e) { } } });
+      } else if (role === 'client') {
+        if (now - lastPing >= T.ping) { lastPing = now; sendTo(hostConn, { k: 'ping' }); }
+        if (now - hostSeen > T.dead) hostLost();
+      }
+    }
+
+    /* ---------- public room api ---------- */
+    var api = {
+      on: function (topic, fn) { var r = { fn: fn }; (evSubs[topic] = evSubs[topic] || []).push(r); return function () { var l = evSubs[topic] || [], i = l.indexOf(r); if (i >= 0) l.splice(i, 1); }; },
+      onPeers: function (fn) {
+        var r = { fn: fn }; peerSubs.push(r);
+        Promise.resolve().then(function () { if (peerSubs.indexOf(r) < 0) return; var cur = peers(); if (cur.length) fn({ peers: cur, joined: cur, left: [], updated: [] }); });
+        return function () { var i = peerSubs.indexOf(r); if (i >= 0) peerSubs.splice(i, 1); };
+      },
+      onConnection: function (fn) { var r = { fn: fn }; connSubs.push(r); return function () { var i = connSubs.indexOf(r); if (i >= 0) connSubs.splice(i, 1); }; },
+      connected: function () { return connected; },
+      peers: peers,
+      presence: function (patch) {
+        myPresence = mergePresence(myPresence, patch);
+        if (myId && role && !closed) { upsert(myId, myPresence); if (role === 'host') bcast({ k: 'pres', peer: myId, presence: myPresence }); else if (connected) sendTo(hostConn, { k: 'pres', d: patch }); }
+        return Promise.resolve();
+      },
+      emit: function (topic, data) {
+        if (closed || !connected || !role) return Promise.resolve();
+        var copy = clone(data), from = myId; Promise.resolve().then(function () { deliver(topic, copy, from); });
+        if (role === 'host') bcast({ k: 'ev', peer: myId, topic: topic, data: data }); else sendTo(hostConn, { k: 'ev', topic: topic, data: data });
+        return Promise.resolve();
+      },
+      leave: function () {
+        if (closed) return Promise.resolve(); closed = true; clearInterval(timer); clearTimeout(flushT);
+        try { if (role === 'host') bcast({ k: 'bye' }); else sendTo(hostConn, { k: 'bye' }); } catch (e) { }
+        var p = peer, c = hostConn; peer = null; hostConn = null; role = null;
+        try { c && c.close(); } catch (e) { } try { p && p.destroy(); } catch (e) { }
+        evSubs = {}; peerSubs.length = 0; connSubs.length = 0; table.clear(); conns.clear();
+        return Promise.resolve();
+      }
+    };
+    return { start: start, api: api };
+  }
+
+  function loadPeerJS() {
+    return new Promise(function (res, rej) {
+      if (root.Peer) return res(root.Peer);
+      var s = document.createElement('script'), to = setTimeout(function () { rej(new Error('Could not load the multiplayer library')); }, 15000);
+      s.src = PEER_SRC; s.async = true;
+      s.onload = function () { clearTimeout(to); root.Peer ? res(root.Peer) : rej(new Error('Multiplayer library missing')); };
+      s.onerror = function () { clearTimeout(to); rej(new Error('Could not load the multiplayer library. Check your connection.')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function createProvider(env) {
+    env = env || {};
+    var T = Object.assign({}, DEFAULT_TIMING, env.timing || {}), load = env.loadPeer || loadPeerJS;
+    return { join: function (name, onStatus) { return load().then(function (Peer) { return makeRoom(Peer, name, onStatus || function () { }, T).start(); }); } };
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { createProvider: createProvider };
+  else if (typeof window !== 'undefined') root.CraftnitePeerRoom = createProvider();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
 /* ===== CRAFTNITE :: 12 multiplayer (drop-in) =====
    Paste just before the final </body>. Publish with capabilities {room:{topics:{ev:"interact"}}}.
    Same room code = same seeded island. Presence carries positions; topic "ev" carries shots, hits,
@@ -4874,7 +5123,7 @@ css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);fon
 document.head.appendChild(css);
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">Everyone in a room must pick the same size, because size is part of the room. Bigger worlds take longer to generate, so keep it small on phones.</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">Everyone in a room must pick the same size, because size is part of the room. Bigger worlds take longer to generate, so keep it small on phones. On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
 const board = el('div'); board.id = 'mp-board'; board.style.display = 'none'; $('hud').appendChild(board);
 const tags = el('div'); tags.style.cssText = 'position:absolute;inset:0;pointer-events:none'; $('hud').appendChild(tags);
@@ -4900,10 +5149,11 @@ async function join() {
   const code = clean($('mp-code').value) || rcode(); $('mp-code').value = code; Store.set('mpcode', code);
   try {
     st('Connecting…');
-    const C = window.claude, R = C && C.use ? await C.use('room') : null;
-    if (!R) throw new Error('Multiplayer only works in the published version of this page, opened while signed in.');
+    let R = null; try { const C = window.claude; R = C && C.use ? await C.use('room') : null; } catch (x) { R = null; }
+    if (!R && !window.CraftnitePeerRoom) throw new Error('Multiplayer could not start in this browser.');
+    const say = t => { st(t); try { if (MP.active && t) HUD.toast(t); } catch (x) { } };
     const size = Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)), key = 'cn-' + code + '-s' + size; MP.size = size;
-    MP.room = await R.join(key); MP.code = code; st('');
+    MP.room = R ? await R.join(key) : await window.CraftnitePeerRoom.join(key, say); MP.code = code; st('');
     MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); MP.joining = true; Store.set('mpmonsters', !MP.noMonsters);
     await startSession('survival', { seed: hashStr(key), size });
     start();
