@@ -3215,11 +3215,14 @@ function steer(b, tx, tz, mul, face) {
   return d;
 }
 function followPath(b, goalX, goalZ, mul, dt) {
-  const br = b.brain; br.pathT -= dt;
+  const br = b.brain; br.pathT -= dt; br.pathFail = false;
   const gd = Math.hypot(goalX - b.x, goalZ - b.z);
   if (gd < 1.2) { b.wishX = b.wishZ = 0; return gd; }
   if ((br.pathT <= 0 || !br.path || Math.hypot(br.pgx - goalX, br.pgz - goalZ) > 6) && gd > 3) {
     br.path = findPath(b.x, b.z, goalX, goalZ, gd > 60 ? 3200 : 1800) || []; br.pgx = goalX; br.pgz = goalZ; br.pathT = 3 + Math.random() * 2; br.pi = 0;
+    // goal unreachable: the path stops well short of it and makes no real progress
+    const lp = br.path.length ? br.path[br.path.length - 1] : [b.x, b.z], ed = Math.hypot(lp[0] - goalX, lp[1] - goalZ);
+    br.pathFail = gd > 8 && ed > 5 && (br.path.length < 3 || ed > gd - 4);
   }
   let tx = goalX, tz = goalZ;
   if (br.path && br.path.length && gd > 3) {
@@ -3238,16 +3241,40 @@ function stuckCheck(b, dt) {
   if (br.lastChk <= 0) {
     br.lastChk = 0.5;
     const mv = Math.hypot(b.x - (br.lx || 0), b.z - (br.lz || 0)); br.lx = b.x; br.lz = b.z;
-    if (moving && mv < 0.25) br.stuckT += 0.5; else br.stuckT = Math.max(0, br.stuckT - 0.5);
-    if (br.stuckT >= 1) { if (b.onGround) jumpBody(b); }
+    if (moving && mv < 0.25) br.stuckT += 0.5; else { br.stuckT = Math.max(0, br.stuckT - 0.5); if (mv >= 1) br.stuckN = 0; }
+    if (br.stuckT >= 1) { br.pathT = 0; if (b.onGround) jumpBody(b); }
     if (br.stuckT >= 2.5) {
       // dig through whatever is ahead (never bedrock / vault seals)
       const f = aimDirOf(b.yaw, 0), bx = Math.floor(b.x + f[0] * 0.9), bz = Math.floor(b.z + f[2] * 0.9), by = Math.floor(b.y);
       for (const h of [1, 0, 2]) { const id = G.world.getBlock(bx, by + h, bz); if (id !== 0 && B_SOLID[id] && !BD[id].unbreak) { breakBlock(bx, by + h, bz, b, { quiet: false }); break; } }
       br.stuckT = 1.2; if (Math.random() < 0.3) br.path = null;
+      br.stuckN = (br.stuckN || 0) + 1; if (br.stuckN >= 3) botGiveUp(b, br);
     }
-    if (br.stuckT >= 5) { br.strafe = (Math.random() < 0.5 ? -1 : 1); br.stuckT = 0; br.path = null; }
   }
+}
+
+/* ---------- bot unstick helpers ---------- */
+function botGoalKey(g) {
+  if (!g) return null;
+  if (g.type === 'chest') return 'c' + g.c.x + ',' + g.c.y + ',' + g.c.z;
+  if (g.type === 'drop') return 'd' + Math.round(g.d.x / 4) + ',' + Math.round(g.d.z / 4);
+  if (g.type === 'poi') return 'p' + Math.round(g.x / 10) + ',' + Math.round(g.z / 10);
+  return null;
+}
+function botIsBad(br, g) { const k = botGoalKey(g); return !!(k && br.bad && br.bad.some(e => e.k === k && e.t > G.t)); }
+function botMarkBad(br, g) { const k = botGoalKey(g); if (!k) return; br.bad = (br.bad || []).filter(e => e.t > G.t); br.bad.push({ k, t: G.t + 40 }); }
+function botWander(b, br) {
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * TAU, r = rnd(10, 24), x = b.x + Math.cos(a) * r, z = b.z + Math.sin(a) * r, y = walkable(Math.floor(x), Math.floor(z));
+    if (y < 0 || Math.abs(y - b.y) > 4) continue; if (G.zone && !inZone(x, z, 4)) continue;
+    br.wander = { x, z, t: G.t + 7 }; return;
+  }
+  br.wander = null;
+}
+function botGiveUp(b, br) {
+  botMarkBad(br, br.goal); br.goal = null; br.goalT = 0; br.invest = null; br.path = null; br.pathT = 0; br.mineTarget = null;
+  br.stuckT = 0; br.stuckN = 0; br.idleT = 0; br.noGatherT = G.t + 6; botWander(b, br);
+  if (b.onGround) jumpBody(b);
 }
 
 /* ---------- bots ---------- */
@@ -3350,6 +3377,8 @@ function botUpdate(b, dt) {
   else if (br.invest && G.t < br.invest.t) state = 'search';
   else state = 'loot';
   if (state === 'fight' && b.hp + b.sh < 38 && vis && br.fleeT <= 0) { br.fleeT = 2.5 + Math.random() * 2; state = 'flee'; }
+  if ((state === 'loot' || state === 'search') && br.wander && G.t < br.wander.t) state = 'wander';
+  if (state !== 'loot') { br.mining = false; br.mineT = 0; }
   br.state = state;
   // ---- weapon choice ----
   const dEn = enemy && br.ls ? Math.hypot(br.ls.x - b.x, br.ls.z - b.z) : 30;
@@ -3359,12 +3388,19 @@ function botUpdate(b, dt) {
   if (state === 'fight') botFight(b, br, D, enemy, vis, dEn, dt);
   else if (state === 'flee') botFlee(b, br, D, enemy, dt);
   else if (state === 'zone') { const Z = G.zone; followPath(b, Z.cx + rnd(-1, 1), Z.cz + rnd(-1, 1), 1, dt); b.sprint = true; b.speed = 5.2; if (b.inWater) b.jumpHeld = true; if (G.zone.shrinking || outside) { /* if far and bridging needed */ } tryTowardZoneBuild(b, br, D, dt); }
-  else if (state === 'search') { const iv = br.invest; const d = followPath(b, iv.x, iv.z, 0.85, dt); if (d < 3) { br.invest = null; } b.sprint = d > 14; if (b.sprint) b.speed = 5.2; }
+  else if (state === 'wander') { const wd = followPath(b, br.wander.x, br.wander.z, 1, dt); b.sprint = true; if (wd < 2.5 || br.pathFail) br.wander = null; }
+  else if (state === 'search') { const iv = br.invest; const d = followPath(b, iv.x, iv.z, 0.85, dt); if (d < 3 || br.pathFail) { br.invest = null; } b.sprint = d > 14; if (b.sprint) b.speed = 5.2; }
   else botLoot(b, br, D, dt);
   if (b.inWater) b.jumpHeld = true;
   // ---- apply movement flags ----
   if (b.sprint) b.speed = Math.max(b.speed, 5.3);
   stuckCheck(b, dt);
+  br.idleChk = (br.idleChk || 0) - dt;
+  if (br.idleChk <= 0) {
+    br.idleChk = 0.5; const imv = Math.hypot(b.x - (br.ix == null ? b.x : br.ix), b.z - (br.iz == null ? b.z : br.iz)); br.ix = b.x; br.iz = b.z;
+    if (imv < 0.3 && state !== 'fight' && !br.mining) br.idleT = (br.idleT || 0) + 0.5; else br.idleT = 0;
+    if (br.idleT >= 2.5) botGiveUp(b, br);
+  }
   if (br.strafeOverride) { }
   // aim vector
   b.aimV = aimDirOf(b.yaw, b.pitch);
@@ -3379,29 +3415,30 @@ function botUpdate(b, dt) {
 function botLoot(b, br, D, dt) {
   // decide goal: drop in view > chest > resource > POI
   b.sprint = true; br.mining = false;
-  const needGun = !botHasGun(b), needMats = (invCount(b.inv, 'wood') + invCount(b.inv, 'stone') + invCount(b.inv, 'iron')) < 60 && G.difficulty !== 'beginner';
+  const needGun = !botHasGun(b), needMats = (invCount(b.inv, 'wood') + invCount(b.inv, 'stone') + invCount(b.inv, 'iron')) < 60 && G.difficulty !== 'beginner' && G.t > (br.noGatherT || 0);
   if (!br.goal || br.goalT <= 0 || (br.goal.type === 'drop' && !G.drops.includes(br.goal.d)) || (br.goal.type === 'chest' && G.world.opened.has(G.world.key(br.goal.c.x, br.goal.c.y, br.goal.c.z)))) {
-    br.goal = null; br.goalT = 6 + Math.random() * 6;
+    br.goal = null; br.goalT = 6 + Math.random() * 6; br.atGoalT = 0;
     // visible drops
-    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
+    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; if (botIsBad(br, { type: 'drop', d })) continue; const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
     if (bd) br.goal = { type: 'drop', d: bd };
     else {
       const c = findChestNear(b.x, b.y, b.z, (needGun ? 80 : 45) * D.loot); // chests known from map + sight (approximation: bots scout near)
-      if (c && Math.hypot(c.x - b.x, c.z - b.z) < 90 && (Math.random() < 0.85)) br.goal = { type: 'chest', c };
+      if (c && Math.hypot(c.x - b.x, c.z - b.z) < 90 && !botIsBad(br, { type: 'chest', c }) && (Math.random() < 0.85)) br.goal = { type: 'chest', c };
       else if (needMats && Math.random() < 0.6) { br.goal = { type: 'gather' }; }
       else { const poi = botPickPOI(b); br.goal = { type: 'poi', x: poi.x, z: poi.z }; br.goalT = 18; }
     }
   }
   const g = br.goal; if (!g) return;
-  if (g.type === 'drop') { followPath(b, g.d.x, g.d.z, 1, dt); }
-  else if (g.type === 'chest') { const gd = followPath(b, g.c.x + 0.5, g.c.z + 0.5, 1, dt); if (gd < 2.6 && Math.abs(g.c.y - b.y) < 6) { const c = g.c; openChest(b, c.x, c.y, c.z); br.goal = null; } }
+  if (g.type === 'drop') { const gd = followPath(b, g.d.x, g.d.z, 1, dt); if (gd < 1.8) { br.atGoalT = (br.atGoalT || 0) + dt; if (br.atGoalT > 1.2) { botMarkBad(br, g); br.goal = null; } } else br.atGoalT = 0; }
+  else if (g.type === 'chest') { const gd = followPath(b, g.c.x + 0.5, g.c.z + 0.5, 1, dt); if (gd < 2.6 && Math.abs(g.c.y - b.y) < 6) { const c = g.c; openChest(b, c.x, c.y, c.z); br.goal = null; } else if (gd < 2.6) { br.atGoalT = (br.atGoalT || 0) + dt; if (br.atGoalT > 1) { botMarkBad(br, g); br.goal = null; } } }
   else if (g.type === 'poi') { const gd = followPath(b, g.x, g.z, 1, dt); if (gd < 5) { br.goal = null; br.goalT = 0; } }
+  if (br.pathFail && br.goal && g.type !== 'gather') { botMarkBad(br, g); br.goal = null; br.goalT = 0; }
   else if (g.type === 'gather') { botGather(b, br, D, dt); }
 }
 function botPickPOI(b) {
   const pois = G.world.pois.filter(p => !p.hidden && p.type !== 'tower' || Math.random() < 0.3);
   const Z = G.zone; let best = null, bs = -1e9;
-  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (sc > bs) { bs = sc; best = p; } }
+  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (botIsBad(b.brain, { type: 'poi', x: p.x, z: p.z })) sc -= 300; if (sc > bs) { bs = sc; best = p; } }
   return best || { x: G.world.W / 2, z: G.world.D / 2 };
 }
 function botGather(b, br, D, dt) {
@@ -3414,9 +3451,10 @@ function botGather(b, br, D, dt) {
       if (br.mineTarget) break;
       const top = w.getBlock(x, h, z); if (top === BK.stone && Math.random() < 0.15) { br.mineTarget = { x, y: h, z }; break; }
     }
-    if (!br.mineTarget) { br.goal = null; return; }
+    if (!br.mineTarget) { br.goal = null; br.noGatherT = G.t + 10; return; }
   }
   const t = br.mineTarget, gd = followPath(b, t.x + 0.5, t.z + 0.5, 1, dt);
+  if (br.pathFail) { br.mineTarget = null; br.goal = null; br.noGatherT = G.t + 5; return; }
   if (gd < 3.4) { br.mining = true; b.wishX = b.wishZ = 0; const dx = t.x + 0.5 - b.x, dz = t.z + 0.5 - b.z; b.yaw += clamp(angDiff(b.yaw, Math.atan2(-dx, -dz)), -0.4, 0.4); b.pitch = Math.atan2(t.y + 0.5 - (b.y + 1.6), Math.hypot(dx, dz)); }
 }
 function botMine(b, br, dt) {
@@ -5431,7 +5469,8 @@ function frame(dt) {
     if (!r.tag) { r.tag = el('div', 'mp-tag', '<span></span><i><b></b></i>'); tags.appendChild(r.tag); }
     if (r.tagDirty) { r.tagDirty = false; r.tag.firstChild.textContent = r.name; r.tag.querySelector('b').style.width = r.hp + '%'; }
     v.set(r.x, r.y + 2.2, r.z).project(cam); const d = Math.hypot(r.x - cam.position.x, r.z - cam.position.z);
-    if (r.dead || v.z > 1 || d > 100) r.tag.style.display = 'none';
+    const cp = cam.position, hidden = segBlocked(cp.x, cp.y, cp.z, r.x, r.y + 1.7, r.z) && segBlocked(cp.x, cp.y, cp.z, r.x, r.y + 0.9, r.z);
+    if (r.dead || v.z > 1 || d > 100 || hidden) r.tag.style.display = 'none';
     else { r.tag.style.display = ''; r.tag.style.left = ((v.x * 0.5 + 0.5) * W) + 'px'; r.tag.style.top = ((-v.y * 0.5 + 0.5) * H) + 'px'; r.tag.style.opacity = clamp(1.4 - d / 80, 0.3, 1); }
   }
   if (MP.t - MP.tPres >= 0.1) { MP.tPres = MP.t; const o = myPresence(), j = JSON.stringify(o); if (j !== MP.lastPres) { MP.lastPres = j; room.presence(o).catch(() => { }); } }
