@@ -5102,6 +5102,35 @@ boot();
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>
+/* ===== CRAFTNITE :: multiplayer lobby rules =====
+   Pure functions over the room's peer list, so every player computes the same answer.
+   Lobby members publish presence { lb: 1, lj: joinTime, nm: name }.
+   The host is the lobby member who joined first (ties broken by peer id), so if the host leaves the next one takes over.
+   The host starts the match by setting presence { go: 1 }. A match is "started" when the host says go or anyone is already in game (rd: 1). */
+(function (root) {
+  'use strict';
+  var MIN_PLAYERS = 2;
+  var num = function (v) { return typeof v === 'number' && isFinite(v) ? v : 0; };
+  function state(peers) {
+    var viewers = (peers || []).filter(function (p) { return p && p.kind === 'viewer' && p.presence; });
+    var list = viewers.filter(function (p) { return p.presence.lb === 1; }).sort(function (a, b) {
+      return (num(a.presence.lj) - num(b.presence.lj)) || (a.peer < b.peer ? -1 : a.peer > b.peer ? 1 : 0);
+    });
+    var host = list[0] || null;
+    var inGame = viewers.some(function (p) { return p.presence.rd === 1; });
+    var go = !!(host && host.presence.go === 1);
+    var started = inGame || go, amHost = !!(host && host.sameTab);
+    return {
+      list: list, host: host, count: list.length, amHost: amHost, started: started, inGame: inGame,
+      me: list.filter(function (p) { return p.sameTab; })[0] || null,
+      canStart: amHost && list.length >= MIN_PLAYERS && !started
+    };
+  }
+  var api = { state: state, MIN_PLAYERS: MIN_PLAYERS };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CraftniteLobby = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
 /* ===== CRAFTNITE :: 12 multiplayer (drop-in) =====
    Paste just before the final </body>. Publish with capabilities {room:{topics:{ev:"interact"}}}.
    Same room code = same seeded island. Presence carries positions; topic "ev" carries shots, hits,
@@ -5123,8 +5152,12 @@ css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);fon
 document.head.appendChild(css);
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">Everyone in a room must pick the same size, because size is part of the room. Bigger worlds take longer to generate, so keep it small on phones. On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">Everyone in a room must pick the same size, because size is part of the room. Bigger worlds take longer to generate, so keep it small on phones. On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
+css.textContent += '.mpl-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(43,55,80,.6);font-family:var(--display);letter-spacing:.06em;font-size:16px}.mpl-row em{font-style:normal;color:var(--amber);font-size:12px;letter-spacing:.12em}.mpl-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mpl-msg{margin-top:10px}';
+const lsec = el('section', 'screen'); lsec.id = 'scr-mpl';
+lsec.innerHTML = '<h2>Lobby</h2><p class="lead" id="mpl-info"></p><div class="card"><label>Players <span id="mpl-count" style="color:var(--amber)"></span></label><div id="mpl-list"></div><div id="mpl-msg" class="lead"></div></div><div class="col"><button class="btn pri" id="mpl-start">Start game</button><button class="btn small" id="mpl-leave">Leave lobby</button></div>';
+$('menu').insertBefore(lsec, $('menutoast'));
 const board = el('div'); board.id = 'mp-board'; board.style.display = 'none'; $('hud').appendChild(board);
 const tags = el('div'); tags.style.cssText = 'position:absolute;inset:0;pointer-events:none'; $('hud').appendChild(tags);
 const st = t => { $('mp-status').textContent = t || ''; };
@@ -5154,14 +5187,59 @@ async function join() {
     const say = t => { st(t); try { if (MP.active && t) HUD.toast(t); } catch (x) { } };
     const size = Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)), key = 'cn-' + code + '-s' + size; MP.size = size;
     MP.room = R ? await R.join(key) : await window.CraftnitePeerRoom.join(key, say); MP.code = code; st('');
-    MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); MP.joining = true; Store.set('mpmonsters', !MP.noMonsters);
-    await startSession('survival', { seed: hashStr(key), size });
-    start();
+    MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); Store.set('mpmonsters', !MP.noMonsters);
+    lobbyEnter();
   } catch (e) {
     console.error(e); st(String(e && e.message || e)); UI.loading(false);
     if (MP.room && !MP.active) { try { MP.room.leave(); } catch (x) { } MP.room = null; }
   } finally { MP.busy = false; MP.joining = false; }
 }
+/* ---------- lobby: wait for players, host starts (needs 2+) ---------- */
+const L = { on: false, starting: false, offs: [], timer: 0 };
+function lobbyRender(S) {
+  const nm = p => esc(String(p.presence.nm || 'Player').replace(/[<>]/g, '').slice(0, 14) || 'Player');
+  $('mpl-count').textContent = S.count + (S.count === 1 ? ' player' : ' players');
+  $('mpl-list').innerHTML = S.list.map(p => '<div class="mpl-row"><span>' + nm(p) + (p.sameTab ? ' (you)' : '') + '</span>' + (p === S.host ? '<em>HOST</em>' : '') + '</div>').join('') || '<div class="mpl-row"><span>Joining…</span></div>';
+  const b = $('mpl-start'); b.style.display = S.amHost ? '' : 'none'; b.disabled = !S.canStart || !MP.conn;
+  $('mpl-msg').textContent = !MP.conn ? 'Connection lost, reconnecting…'
+    : S.amHost ? (S.count < CraftniteLobby.MIN_PLAYERS ? 'You are the host. At least ' + CraftniteLobby.MIN_PLAYERS + ' players are needed to start. Share the room code ' + MP.code.toUpperCase() + ' and the world size with a friend.' : 'Press Start game when everyone has joined.')
+    : 'Waiting for the host to start the game…';
+}
+function lobbyRefresh() {
+  if (!L.on || L.starting || !MP.room) return;
+  const S = CraftniteLobby.state(MP.room.peers());
+  if (S.started) { lobbyBegin(); return; }
+  lobbyRender(S);
+}
+function lobbyEnter() {
+  const room = MP.room; L.on = true; L.starting = false; MP.conn = true;
+  room.presence({ lb: 1, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
+  L.offs = [room.onPeers(lobbyRefresh), room.onConnection(c => { MP.conn = c; lobbyRefresh(); })];
+  clearInterval(L.timer); L.timer = setInterval(lobbyRefresh, 500);
+  $('mpl-info').textContent = 'Room ' + MP.code.toUpperCase() + ' · ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : '');
+  UI.showScreen('mpl'); lobbyRefresh();
+}
+function lobbyStop() { L.on = false; clearInterval(L.timer); for (const f of L.offs) { try { f(); } catch (e) { } } L.offs = []; }
+function lobbyLeave() {
+  lobbyStop(); try { MP.room && MP.room.leave(); } catch (e) { } MP.room = null; st(''); UI.showScreen('mp');
+}
+async function lobbyBegin() {
+  if (L.starting) return; L.starting = true; lobbyStop(); MP.joining = true;
+  try {
+    const key = 'cn-' + MP.code + '-s' + MP.size;
+    await startSession('survival', { seed: hashStr(key), size: MP.size });
+    try { MP.room.presence({ lb: null }).catch(() => { }); } catch (e) { }
+    start();
+  } catch (e) {
+    console.error(e); UI.loading(false); try { MP.room && MP.room.leave(); } catch (x) { } MP.room = null; st(String(e && e.message || e)); UI.showScreen('mp');
+  } finally { MP.joining = false; }
+}
+$('mpl-start').addEventListener('click', () => {
+  Snd.init(); Snd.play('click'); if (!MP.room) return;
+  const S = CraftniteLobby.state(MP.room.peers()); if (!S.canStart) { lobbyRender(S); return; }
+  MP.room.presence({ go: 1 }).catch(() => { }); lobbyBegin();
+});
+$('mpl-leave').addEventListener('click', () => { Snd.play('click'); lobbyLeave(); });
 function kit(P) {
   P.inv = makeInv(); P.sel = 0; P.creative = false; P.infAmmo = false; P.hp = 100; P.sh = 0;
   for (const s of [mkStack('pickaxe', 1, 0), mkStack('ar', 1, 0), mkStack('ammo_m', 90), mkStack('bandage', 3), mkStack('shield_s', 2), mkStack('wood', 100), mkStack('stone', 60)]) invAdd(P.inv, s);
