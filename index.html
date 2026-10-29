@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Craftnite</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
@@ -198,7 +198,6 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
 @media (max-width:760px){#invgrid{grid-template-columns:repeat(9,38px)}.islot{width:38px;height:38px}.islot img{width:30px;height:30px}.hslot{width:38px;height:38px}.hslot img{width:30px;height:30px}#vitals{width:34vw;bottom:60px}#minimap{width:110px;height:110px}#mini{width:110px}#feedlist{top:150px}.srow{grid-template-columns:1fr}.slot{grid-template-columns:1fr 1fr}.slot span{grid-column:1/-1}}
 @media (prefers-reduced-motion:reduce){#banner.show{animation:none;opacity:1}#hurt.on{animation:none}}
 </style>
-</head><body>
 <div id="app">
 <canvas id="game"></canvas>
 
@@ -2134,8 +2133,8 @@ class Renderer {
   buildChunk(ch) {
     const old = this.meshes.get(ch); if (old) this.dropMesh(old);
     const g = meshChunk(this.world, ch), m = { s: null, t: null };
-    if (g.s) { m.s = new THREE.Mesh(g.s, this.matS); m.s.position.set(ch.cx * CS, 0, ch.cz * CS); m.s.matrixAutoUpdate = false; m.s.updateMatrix(); this.scene.add(m.s); }
-    if (g.t) { m.t = new THREE.Mesh(g.t, this.matT); m.t.position.set(ch.cx * CS, 0, ch.cz * CS); m.t.matrixAutoUpdate = false; m.t.updateMatrix(); m.t.renderOrder = 2; this.scene.add(m.t); }
+    if (g.s) { m.s = new THREE.Mesh(g.s, this.matS); m.s.position.set(0, 0, 0); m.s.matrixAutoUpdate = false; m.s.updateMatrix(); this.scene.add(m.s); }
+    if (g.t) { m.t = new THREE.Mesh(g.t, this.matT); m.t.position.set(0, 0, 0); m.t.matrixAutoUpdate = false; m.t.updateMatrix(); m.t.renderOrder = 2; this.scene.add(m.t); }
     this.meshes.set(ch, m); ch.dirty = false;
   }
   buildAll(budgetMs) { this.updateChunks(this.camera.position.x, this.camera.position.z, budgetMs || 1e9); }
@@ -4476,8 +4475,8 @@ const UI = {
   renderControls() { for (const id of ['controls-list', 'controls-list2']) { const h = $(id); if (h) this.renderControlsInto(h); } },
   renderControlsInto(host) {
     if (host.dataset.done) return; host.dataset.done = 1;
-    const rows = [['Move', 'W A S D'], ['Look', 'Mouse (or arrow keys)'], ['Jump / swim up / climb', 'Space'], ['Sprint', 'Shift'], ['Crouch / swim down / climb down', 'Ctrl or C'], ['Fire / mine / swing / use item', 'Left mouse'], ['Aim down sights / place block', 'Right mouse'], ['Reload  ·  repair piece (build mode)', 'R'], ['Interact · open chest · pick up weapon', 'E'], ['Inventory and crafting', 'Tab or I'], ['Select hotbar slot', '1 – 9 or mouse wheel'], ['Toggle build mode', 'Q'], ['Build mode: choose piece', '1 Wall · 2 Floor · 3 Ramp · 4 Roof'], ['Build mode: material', 'Mouse wheel'], ['Build mode: place / edit piece / repair', 'Left / Right mouse or G / R'], ['Drop selected item', 'X'], ['Camera: first / third person', 'V'], ['Map', 'M'], ['Pause menu', 'Esc'], ['Parachute: dive / open', 'Space'], ['Creative: fly (double-tap)', 'Space'], ['Creative: brush size', 'Shift + wheel']];
-    host.innerHTML = rows.map(r => '<div class="crow"><span>' + r[0] + '</span><kbd>' + r[1] + '</kbd></div>').join('') + '<div class="how"><h4>How a match works</h4><p>Drop from the battle bus, loot chests and the ground, harvest wood, stone and metal with your pickaxe, build walls and ramps to survive fights, and stay inside the shrinking storm circle. Last player standing wins.</p><h4>Survival</h4><p>Gather resources, craft a table, tools and weapons, build a shelter before night, and explore caves for rare minerals. Your world is saved automatically.</p></div>';
+    const rows = [['Move', 'W A S D'], ['Look', 'Mouse (or arrow keys)'], ['Jump / swim up / climb', 'Space'], ['Sprint', 'Shift'], ['Crouch / swim down / climb down', 'Ctrl or C'], ['Fire / mine / swing / use item', 'Left mouse'], ['Aim down sights / place block', 'Right mouse'], ['Reload  ·  repair piece (build mode)', 'R'], ['Interact · open chest · pick up weapon', 'E'], ['Inventory and crafting', 'Tab or I'], ['Select hotbar slot', '1 – 9 or mouse wheel'], ['Toggle build mode', 'Q'], ['Build mode: choose piece', '1 Wall · 2 Floor · 3 Ramp · 4 Roof'], ['Build mode: material', 'Mouse wheel'], ['Build mode: place / edit piece / repair', 'Left / Right mouse or G / R'], ['Drop selected item', 'X'], ['Camera: first / third person', 'V'], ['Map', 'M'], ['Pause menu', 'Esc'], ['Parachute: dive / open', 'Space'], ['Creative: fly (double-tap)', 'Space'], ['Creative: brush size', 'Shift + wheel'], ['Craft an item', 'Tab, then click a recipe (Shift-click ×5)'], ['Use a crafting table / furnace / forge', 'Stand next to it, press E'], ['Place a block or station', 'Select it in the hotbar, Right mouse'], ['Multiplayer: join a room', 'Main menu > Multiplayer, same code = same island'], ['Multiplayer: respawn', 'Automatic, 4 seconds after elimination']];
+    host.innerHTML = rows.map(r => '<div class="crow"><span>' + r[0] + '</span><kbd>' + r[1] + '</kbd></div>').join('') + '<div class="how"><h4>How a match works</h4><p>Drop from the battle bus, loot chests and the ground, harvest wood, stone and metal with your pickaxe, build walls and ramps to survive fights, and stay inside the shrinking storm circle. Last player standing wins.</p><h4>Survival</h4><p>Gather resources, craft a table, tools and weapons, build a shelter before night, and explore caves for rare minerals. Your world is saved automatically.</p><h4>Multiplayer</h4><p>Open Multiplayer from the main menu and enter a room code. Everyone with the same code shares the same island, chests, day cycle, and block edits. It is free-for-all: shoot other players for eliminations, and you respawn a few seconds after you are eliminated.</p></div>';
   },
   /* ---------------- character customization ---------------- */
   buildCustomize() {
@@ -4849,9 +4848,371 @@ function boot() {
   } catch (err) { console.error(err); const m = $('bootmsg'); m.style.display = 'flex'; m.querySelector('p').textContent = 'Craftnite failed to start: ' + (err && err.message || err); }
 }
 boot();
-</script></body></html>
-
-$('nameInput').focus();
 </script>
-</body>
-</html>
+<script>
+/* ===== CRAFTNITE :: 12 multiplayer (drop-in) =====
+   Paste just before the final </body>. Publish with capabilities {room:{topics:{ev:"interact"}}}.
+   Same room code = same seeded island. Presence carries positions; topic "ev" carries shots, hits,
+   projectiles, block edits and eliminations. Damage is attacker-authoritative.
+   Tip: add #roomcode to the artifact link to open straight into that room. */
+try { (function () {
+'use strict';
+if (typeof G === 'undefined' || !G.rend || typeof UI === 'undefined') return;
+const MP = { active: false, busy: false, room: null, code: '', me: null, offs: [], remotes: new Map(), q: [], pend: new Map(), log: new Map(), syncQ: [], synced: new Set(), applying: false, noEcho: false, t: 0, tPres: 0, tFlush: 0, tBoard: 0, lastPres: '', respawnAt: 0, conn: true };
+const DAY = 1200, num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d || 0), r1 = v => Math.round(v * 10) / 10;
+const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 1000000000; };
+const rcode = () => Math.random().toString(36).slice(2, 7), own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const clean = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+const PROJ = ['arrow', 'bolt', 'grenade', 'smoke', 'snow', 'jumppad'];
+
+/* ---------- ui: menu button, join screen, scoreboard, name tags ---------- */
+const css = document.createElement('style');
+css.textContent = '.mp-tag{position:absolute;transform:translate(-50%,-100%);font:600 12px var(--display);letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;white-space:nowrap;pointer-events:none}.mp-tag i{display:block;width:54px;height:4px;margin:2px auto 0;background:#0009;border:1px solid #000}.mp-tag i b{display:block;height:100%;background:#7de86a}#mp-board{position:absolute;top:46px;left:10px;min-width:150px;background:var(--panel);border:1px solid var(--edge);padding:6px 10px;font-size:12px;letter-spacing:.06em;pointer-events:none}#mp-board div{display:flex;justify-content:space-between;gap:14px}#mp-board .me{color:var(--amber)}#mp-board .hd{color:var(--dim);letter-spacing:.14em;font-size:10px;margin-bottom:3px}';
+document.head.appendChild(css);
+const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
+const sec = el('section', 'screen'); sec.id = 'scr-mp';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+$('menu').insertBefore(sec, $('menutoast'));
+const board = el('div'); board.id = 'mp-board'; board.style.display = 'none'; $('hud').appendChild(board);
+const tags = el('div'); tags.style.cssText = 'position:absolute;inset:0;pointer-events:none'; $('hud').appendChild(tags);
+const st = t => { $('mp-status').textContent = t || ''; };
+let hashCode = ''; try { hashCode = clean((location.hash || '').slice(1)); } catch (e) { }
+$('mp-code').value = hashCode || Store.get('mpcode', '') || rcode();
+mb.addEventListener('click', () => { Snd.init(); Snd.play('click'); UI.showScreen('mp'); });
+$('mp-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen('main'); });
+$('mp-rand').addEventListener('click', () => { Snd.play('click'); $('mp-code').value = rcode(); });
+$('mp-join').addEventListener('click', () => { Snd.init(); Snd.play('click'); join(); });
+if (hashCode) { mb.textContent = 'Multiplayer · ' + hashCode.toUpperCase(); }
+
+/* ---------- join / start / stop ---------- */
+async function join() {
+  if (MP.busy) return; MP.busy = true;
+  const code = clean($('mp-code').value) || rcode(); $('mp-code').value = code; Store.set('mpcode', code);
+  try {
+    st('Connecting…');
+    const C = window.claude, R = C && C.use ? await C.use('room') : null;
+    if (!R) throw new Error('Multiplayer only works in the published version of this page, opened while signed in.');
+    MP.room = await R.join('cn-' + code); MP.code = code; st('');
+    await startSession('survival', { seed: hashStr('cn-' + code), size: 12 });
+    start();
+  } catch (e) {
+    console.error(e); st(String(e && e.message || e)); UI.loading(false);
+    if (MP.room && !MP.active) { try { MP.room.leave(); } catch (x) { } MP.room = null; }
+  } finally { MP.busy = false; }
+}
+function kit(P) {
+  P.inv = makeInv(); P.sel = 0; P.creative = false; P.infAmmo = false; P.hp = 100; P.sh = 0;
+  for (const s of [mkStack('pickaxe', 1, 0), mkStack('ar', 1, 0), mkStack('ammo_m', 90), mkStack('bandage', 3), mkStack('shield_s', 2), mkStack('wood', 100), mkStack('stone', 60)]) invAdd(P.inv, s);
+  G.invDirty = true; HUD.equip();
+}
+function start() {
+  const P = G.P, room = MP.room;
+  MP.active = true; G.mode = G.modeName = 'mp'; G.freezeTime = true; G.zone = null;
+  MP.remotes.clear(); MP.q.length = 0; MP.pend.clear(); MP.log.clear(); MP.syncQ.length = 0; MP.synced.clear(); MP.me = null; MP.lastPres = ''; MP.t = MP.tPres = MP.tFlush = MP.tBoard = 0;
+  kit(P); P.kills = 0; G.kills = 0; P.invuln = 3;
+  MP.offs = [room.on('ev', onEv), room.onPeers(onPeers), room.onConnection(c => { MP.conn = c; if (c) MP.lastPres = ''; })];
+  board.style.display = '';
+  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · share the code with friends', '#6ab0ff');
+}
+function stop() {
+  if (!MP.active) return; MP.active = false;
+  for (const r of MP.remotes.values()) drop(r, true); MP.remotes.clear();
+  for (const f of MP.offs) { try { f(); } catch (e) { } } MP.offs = [];
+  try { MP.room && MP.room.leave(); } catch (e) { } MP.room = null; board.style.display = 'none';
+}
+function drop(r, quiet) { removeEntityModel(r); if (r.tag) r.tag.remove(); if (!quiet) HUD.feed(r.name + ' left', 'event'); }
+function push(e) { if (MP.q.length < 60 || e.t === 'h' || e.t === 'k') MP.q.push(e); }
+
+/* ---------- hooks into the game (wrappers; originals stay intact) ---------- */
+const _clear = clearSession; clearSession = function () { stop(); return _clear.apply(this, arguments); };
+const _tg = targets; targets = function (except) { const o = _tg(except); if (MP.active) for (const r of MP.remotes.values()) if (!r.dead && r !== except && r.model) o.push(r); return o; };
+const _ph = physics; physics = function (e, dt) { if (e.invuln > 0) e.invuln -= dt; return _ph.apply(this, arguments); };
+const _dmg = damageEnt;
+damageEnt = function (e, amt, src, o) {
+  if (!e || !e.isRemote) return _dmg.apply(this, arguments);
+  if (!MP.active || e.dead || !(amt > 0) || src !== G.P) return 0;
+  o = o || {}; const a = Math.round(amt), x = o.x != null ? o.x : e.x, y = o.y != null ? o.y : e.y + e.h * 0.7, z = o.z != null ? o.z : e.z;
+  push({ t: 'h', to: e.peer, a, hd: o.head ? 1 : 0 });
+  HUD.hit(!!o.head, false, false); HUD.dmgNum(x, y, z, a, o.head, false); G.rend.burst(x, y, z, 0xd23a3a, 5, 3, 0.09, 0.4, 14);
+  return amt;
+};
+const _db = damageBlock;
+damageBlock = function (x, y, z, dmg, src, o) { if (MP.active && !MP.applying && src === G.P && dmg > 0 && !(o && o.explosion)) push({ t: 'd', x, y, z, a: Math.round(dmg) }); return _db.apply(this, arguments); };
+const _sp = spawnProj;
+spawnProj = function (p) { if (MP.active && !MP.applying && p.owner === G.P) push({ t: 'p', k: p.kind, x: r1(p.x), y: r1(p.y), z: r1(p.z), vx: r1(p.vx), vy: r1(p.vy), vz: r1(p.vz), g: p.grav || 0, rd: p.radius || 0, fu: p.fuse || 0, l: p.life || 6 }); return _sp(p); };
+const _tr = Renderer.prototype.tracer;
+Renderer.prototype.tracer = function (x0, y0, z0, x1, y1, z1, color, w) {
+  if (MP.active && !MP.noEcho && MP.q.length < 30) { const s = G.P && G.P.inv[G.P.sel], it = s && ITEM[s.id]; push({ t: 's', a: [r1(x0), r1(y0), r1(z0), r1(x1), r1(y1), r1(z1)], c: color, w: w || 1, sn: it && it.snd || 'rifle' }); }
+  return _tr.apply(this, arguments);
+};
+const _sb = World.prototype.setBlock;
+World.prototype.setBlock = function (x, y, z, id, noEdit) {
+  const r = _sb.call(this, x, y, z, id, noEdit);
+  if (r && MP.active && !MP.applying && this === G.world) { const k = this.key(x, y, z); MP.pend.set(k, [x, y, z, id]); MP.log.set(k, id); }
+  return r;
+};
+const _ok = G.onKill;
+G.onKill = function (e, src, o) {
+  if (MP.active && e === G.P) {
+    _ok.call(G, e, src, o); MP.respawnAt = G.t + 4; push({ t: 'k', by: src && src.peer || null, vn: e.name });
+    HUD.banner('ELIMINATED', (e.killer ? 'By ' + e.killer + ' · ' : '') + 'respawning…', '#ff6b6b'); return;
+  }
+  return _ok.apply(this, arguments);
+};
+const _op = UI.openPanel; UI.openPanel = function (id) { _op.call(UI, id); if (MP.active) G.paused = false; };   // menus never freeze the shared world
+const _hu = HUD.update; HUD.update = function (dt) { _hu.call(HUD, dt); if (MP.active) frame(dt); };
+
+/* ---------- incoming ---------- */
+function onEv(msg) {
+  const d = msg.data; if (!d || typeof d !== 'object') return;
+  if (msg.sameTab && !MP.me) MP.me = msg.peer;
+  if (d.t === 'b') { if (!msg.sameTab && (!d.to || d.to === MP.me) && Array.isArray(d.a)) applyBlocks(d.a); return; }
+  if (!Array.isArray(d.e)) return;
+  const rem = MP.remotes.get(msg.peer), P = G.P;
+  for (const m of d.e.slice(0, 40)) {
+    if (!m || typeof m !== 'object') continue;
+    if (m.t === 'k') {
+      const vn = String(m.vn || 'Player').replace(/[<>]/g, '').slice(0, 14), by = m.by && m.by !== msg.peer ? m.by : null;
+      const kn = by === MP.me ? P.name : by && MP.remotes.get(by) ? MP.remotes.get(by).name : null;
+      HUD.feed(kn ? kn + ' eliminated ' + vn : vn + ' was eliminated', by === MP.me ? 'kill' : 'normal');
+      if (by && by === MP.me && !msg.sameTab) { P.kills++; G.kills++; Snd.play('win', { vol: 0.25 }); }
+      continue;
+    }
+    if (msg.sameTab) continue;
+    switch (m.t) {
+      case 's': {
+        if (!Array.isArray(m.a) || m.a.length < 6) break; const v = m.a.map(n => num(n));
+        MP.noEcho = true; try { G.rend.tracer(v[0], v[1], v[2], v[3], v[4], v[5], num(m.c, 0xffe9a8), num(m.w, 1)); } finally { MP.noEcho = false; }
+        G.rend.flash(v[0], v[1], v[2], 0.7, 0xffd27a, 0.06); Snd.play(typeof m.sn === 'string' && own(SFX, m.sn) ? m.sn : 'rifle', { x: v[0], y: v[1], z: v[2], maxD: 110, vol: 0.9 }); if (rem) rem.lastFireT = G.t; break;
+      }
+      case 'p': {
+        if (!rem || !PROJ.includes(m.k)) break; MP.applying = true;
+        try { _sp({ kind: m.k, x: num(m.x), y: num(m.y), z: num(m.z), vx: num(m.vx), vy: num(m.vy), vz: num(m.vz), dmg: 0, grav: num(m.g), radius: clamp(num(m.rd, 4), 0, 8), fuse: clamp(num(m.fu, 9), 0, 12), life: clamp(num(m.l, 6), 1, 14), owner: rem }); } finally { MP.applying = false; }
+        if (m.k === 'arrow' || m.k === 'bolt') Snd.play('bow', { x: num(m.x), y: num(m.y), z: num(m.z), maxD: 70 }); break;
+      }
+      case 'd': {
+        const x = num(m.x) | 0, y = num(m.y) | 0, z = num(m.z) | 0; if (!G.world.inB(x, z)) break;
+        MP.applying = true; try { _db(x, y, z, clamp(num(m.a), 0, 400), null, {}); } finally { MP.applying = false; } break;
+      }
+      case 'h': {
+        if (m.to !== MP.me || P.dead) break; const a = clamp(num(m.a), 0, 300);
+        if (a > 0) _dmg(P, a, rem || null, { head: !!m.hd, type: 'pvp' }); break;
+      }
+    }
+  }
+}
+function applyBlocks(a) {
+  const w = G.world; MP.applying = true;
+  try {
+    for (let i = 0; i + 3 < a.length && i < 1000; i += 4) {
+      const x = num(a[i]) | 0, y = num(a[i + 1]) | 0, z = num(a[i + 2]) | 0, id = num(a[i + 3]) | 0;
+      if (id < 0 || id >= NB || y < 1 || y >= WH || !w.inB(x, z)) continue;
+      const old = w.getBlock(x, y, z);
+      if (w.setBlock(x, y, z, id, true)) {
+        const k = w.key(x, y, z); MP.log.set(k, id);
+        if (BD[id].hp && B_SOLID[id]) w.hpMap.set(k, BD[id].hp);
+        if (id === BK.chest_open) w.opened.add(k);
+        if (id === 0) G.rend.blockBurst(x, y, z, old, 3);
+      }
+    }
+  } finally { MP.applying = false; }
+}
+/* the lowest-id ready peer replays the session's block edits to anyone who joins late */
+function onPeers(ch) {
+  if (!MP.active) return;
+  for (const p of ch.joined.concat(ch.updated)) {
+    if (p.sameTab || p.kind !== 'viewer' || !p.presence || p.presence.rd !== 1 || MP.synced.has(p.peer)) continue;
+    MP.synced.add(p.peer); if (!MP.log.size) continue;
+    const cand = ch.peers.filter(q => q.kind === 'viewer' && q.peer !== p.peer && q.presence && q.presence.rd === 1).map(q => q.peer).sort();
+    if (!MP.me || cand[0] !== MP.me) continue;
+    const all = []; for (const [k, id] of MP.log) { const u = G.world.unkey(k); all.push(u[0], u[1], u[2], id); }
+    for (let i = 0; i < all.length; i += 800) MP.syncQ.push({ to: p.peer, a: all.slice(i, i + 800) });
+  }
+}
+
+/* ---------- remote players ---------- */
+function mkRemote(peer) {
+  const r = mkBody({ kind: 'remote', isRemote: true, peer, name: 'Player', w: 0.6, h: 1.8, eye: 1.62, inv: [null], sel: 0, blood: 0xd23a3a });
+  r.inp = { aim: false }; r.fresh = true; r.skKey = ''; r.hd = '\0'; r.kills = 0; return r;
+}
+function ingest(r, pr) {
+  const W = G.world; r.pr = pr;
+  r.tx = clamp(num(pr.x), 0, W.W); r.ty = clamp(num(pr.y), -10, WH + 40); r.tz = clamp(num(pr.z), 0, W.D); r.tyaw = num(pr.yw); r.tpitch = clamp(num(pr.pt), -1.5, 1.5);
+  r.hp = clamp(num(pr.hp, 100), 0, 100); r.sh = clamp(num(pr.sh), 0, 100); r.kills = num(pr.k) | 0;
+  const nm = String(pr.nm || 'Player').replace(/[<>]/g, '').slice(0, 14) || 'Player'; if (nm !== r.name || r.fresh) { r.name = nm; r.tagDirty = true; }
+  r.dead = !!pr.dd; r.hidden = r.dead; r.crouch = !!pr.cr; r.inp.aim = !!pr.ai; r.tagDirty = true;
+  const sk = Array.isArray(pr.sk) ? pr.sk.map(n => num(n) | 0) : [0, 0, 0, 0, 0], key = sk.join();
+  if (key !== r.skKey) {
+    r.skKey = key; if (r.model) removeEntityModel(r);
+    r.model = makeSkinModel({ skin: clamp(sk[0], 0, 7), hair: clamp(sk[1], 0, 7), shirt: clamp(sk[2], 0, 7), pants: clamp(sk[3], 0, 7), hat: clamp(sk[4], 0, 3) }); r.model.userData.walkPh = 0; G.rend.scene.add(r.model);
+  }
+  const hd = String(pr.hd || '');
+  if (hd !== r.hd) { r.hd = hd; const a = hd.split(':'), it = own(ITEM, a[0]) ? ITEM[a[0]] : null; r.inv[0] = it && it.type !== 'special' ? mkStack(a[0], 1, clamp(+a[1] | 0, 0, 4)) : null; }
+  if (r.fresh) { r.x = r.tx; r.y = r.ty; r.z = r.tz; r.yaw = r.tyaw; r.pitch = r.tpitch; r.fresh = false; HUD.feed(r.name + ' joined', 'event'); }
+}
+function myPresence() {
+  const P = G.P, s = P.inv[P.sel], q = v => Math.round(v * 100) / 100;
+  return { rd: 1, x: q(P.x), y: q(P.y), z: q(P.z), yw: q(P.yaw), pt: q(P.pitch), hp: Math.ceil(P.hp), sh: Math.ceil(P.sh), hd: s ? s.id + ':' + (s.r || 0) : '', sk: [MySkin.skin, MySkin.hair, MySkin.shirt, MySkin.pants, MySkin.hat], nm: P.name, k: P.kills | 0, dd: P.dead ? 1 : 0, cr: P.crouch ? 1 : 0, ai: G.aimHeld ? 1 : 0 };
+}
+function respawn() {
+  const P = G.P, sp = findSpawn(G.world, null, 0);
+  P.dead = false; P.spectate = false; P.x = sp[0]; P.y = sp[1] + 0.2; P.z = sp[2]; P.vx = P.vy = P.vz = 0; P.burn = 0; P.slow = 0; P.lastHurt = G.t; P.using = null; P.invuln = 3; P.maxY = P.y;
+  kit(P); HUD.banner('RESPAWNED', 'Spawn protection for 3 seconds', '#7ad06a');
+}
+
+/* ---------- per frame ---------- */
+function frame(dt) {
+  const P = G.P, room = MP.room; if (!P || !room) return;
+  MP.t += dt;
+  const peers = room.peers();
+  if (!MP.me) { const m = peers.find(p => p.sameTab); if (m) MP.me = m.peer; }
+  G.tod = (Date.now() / 1000 / DAY + 0.32) % 1;
+  if (P.dead && G.t > MP.respawnAt) respawn();
+  const seen = new Set();
+  for (const p of peers) {
+    if (p.sameTab || p.kind !== 'viewer' || !p.presence || p.presence.rd !== 1) continue;
+    seen.add(p.peer); let r = MP.remotes.get(p.peer); if (!r) { r = mkRemote(p.peer); MP.remotes.set(p.peer, r); }
+    if (r.pr !== p.presence) ingest(r, p.presence);
+  }
+  const cam = G.rend.camera, v = new THREE.Vector3(), k = 1 - Math.exp(-16 * dt), W = window.innerWidth, H = window.innerHeight;
+  for (const [id, r] of MP.remotes) {
+    if (!seen.has(id)) { drop(r); MP.remotes.delete(id); continue; }
+    if (Math.hypot(r.tx - r.x, r.tz - r.z) > 12) { r.x = r.tx; r.y = r.ty; r.z = r.tz; }
+    const nx = r.x + (r.tx - r.x) * k, ny = r.y + (r.ty - r.y) * k, nz = r.z + (r.tz - r.z) * k;
+    r.vx += ((nx - r.x) / dt - r.vx) * 0.3; r.vy += ((ny - r.y) / dt - r.vy) * 0.3; r.vz += ((nz - r.z) / dt - r.vz) * 0.3;
+    r.x = nx; r.y = ny; r.z = nz; r.yaw += angDiff(r.yaw, r.tyaw) * k; r.pitch += (r.tpitch - r.pitch) * k; r.onGround = Math.abs(r.vy) < 1.5;
+    updateVisual(r, dt, false);
+    if (!r.tag) { r.tag = el('div', 'mp-tag', '<span></span><i><b></b></i>'); tags.appendChild(r.tag); }
+    if (r.tagDirty) { r.tagDirty = false; r.tag.firstChild.textContent = r.name; r.tag.querySelector('b').style.width = r.hp + '%'; }
+    v.set(r.x, r.y + 2.2, r.z).project(cam); const d = Math.hypot(r.x - cam.position.x, r.z - cam.position.z);
+    if (r.dead || v.z > 1 || d > 100) r.tag.style.display = 'none';
+    else { r.tag.style.display = ''; r.tag.style.left = ((v.x * 0.5 + 0.5) * W) + 'px'; r.tag.style.top = ((-v.y * 0.5 + 0.5) * H) + 'px'; r.tag.style.opacity = clamp(1.4 - d / 80, 0.3, 1); }
+  }
+  if (MP.t - MP.tPres >= 0.1) { MP.tPres = MP.t; const o = myPresence(), j = JSON.stringify(o); if (j !== MP.lastPres) { MP.lastPres = j; room.presence(o).catch(() => { }); } }
+  if (MP.t - MP.tFlush >= 0.1) {
+    MP.tFlush = MP.t; const send = d => room.emit('ev', d).catch(() => { });
+    if (MP.q.length) { /* keep each message under the 4 KiB room limit */
+      const out = []; let n = 16;
+      while (MP.q.length && out.length < 24) { const j = JSON.stringify(MP.q[0]).length + 1; if (out.length && n + j > 3400) break; n += j; out.push(MP.q.shift()); }
+      send({ e: out });
+    }
+    if (MP.pend.size) { const a = []; for (const [key, b] of MP.pend) { a.push(b[0], b[1], b[2], b[3]); MP.pend.delete(key); if (a.length >= 800) break; } send({ t: 'b', a }); }
+    else if (MP.syncQ.length) { const s = MP.syncQ.shift(); send({ t: 'b', to: s.to, a: s.a }); }
+  }
+  if (MP.t - MP.tBoard >= 0.5) {
+    MP.tBoard = MP.t; const rows = [[P.name, P.kills | 0, true]]; for (const r of MP.remotes.values()) rows.push([r.name, r.kills | 0, false]); rows.sort((a, b) => b[1] - a[1]);
+    board.innerHTML = '<div class="hd">ROOM ' + esc(MP.code.toUpperCase()) + (MP.conn ? '' : ' · RECONNECTING') + '</div>' + rows.slice(0, 8).map(r => '<div class="' + (r[2] ? 'me' : '') + '"><span>' + esc(r[0]) + '</span><b>' + r[1] + '</b></div>').join('');
+    $('alivenum').textContent = rows.length; $('killnum').textContent = P.kills | 0;
+  }
+  $('objective').textContent = 'Free-for-all · loot chests, build, eliminate';
+}
+})(); } catch (e) { console.error('multiplayer module failed to load', e); }
+</script>
+<script>
+/* hide the system cursor while playing; the in-game crosshair replaces it. Shows again over menus, panels and the death/end screens. */
+(function () {
+  const st = document.createElement('style');
+  st.textContent = 'body.cn-play #app, body.cn-play #game, body.cn-play #hud { cursor: none !important; }';
+  document.head.appendChild(st);
+  setInterval(function () {
+    try { document.body.classList.toggle('cn-play', !!(G.started && !G.uiOpen && !G.over && G.P && !G.P.dead)); } catch (e) { }
+  }, 150);
+})();
+</script>
+<script>
+/* ===== CRAFTNITE :: shop. Coins are earned from Battle Royale placement and spent on characters. ===== */
+try { (function () {
+'use strict';
+if (typeof UI === 'undefined' || typeof Store === 'undefined' || typeof G === 'undefined') return;
+/* every colour is free; hats come with the characters that wear them */
+const CHARS = [
+  { id: 'rookie', name: 'Rookie', tag: 'Starter', price: 0, s: [1, 2, 4, 1, 0] },
+  { id: 'scout', name: 'Scout', tag: 'Cap, green jacket', price: 100, s: [2, 3, 3, 3, 1] },
+  { id: 'sage', name: 'Jungle Sage', tag: 'Green skin, forest gear', price: 250, s: [6, 1, 3, 4, 0] },
+  { id: 'frost', name: 'Frost Ranger', tag: 'Silver hair, white coat', price: 200, s: [7, 4, 6, 2, 0] },
+  { id: 'gladiator', name: 'Gladiator', tag: 'Helmet, red tunic', price: 300, s: [3, 0, 0, 5, 3] },
+  { id: 'inferno', name: 'Inferno', tag: 'Red hair, orange armor', price: 400, s: [2, 5, 1, 5, 0] },
+  { id: 'sentinel', name: 'Sentinel', tag: 'Helmet, navy uniform', price: 500, s: [4, 4, 7, 7, 3] },
+  { id: 'ghost', name: 'Ghost', tag: 'All white', price: 600, s: [5, 4, 6, 6, 0] },
+  { id: 'royal', name: 'Royal', tag: 'Crown, purple robe', price: 800, s: [1, 3, 5, 0, 2] }
+];
+const KEYS = ['skin', 'hair', 'shirt', 'pants', 'hat'];
+const coins = () => Math.max(0, Store.get('coins', 0) | 0);
+const ownedList = () => { const o = Store.get('owned', []); return Array.isArray(o) ? o : []; };
+const hasChar = c => c.price === 0 || ownedList().indexOf('char:' + c.id) >= 0;
+const hatOwned = i => i === 0 || ownedList().indexOf('hat:' + i) >= 0 || CHARS.some(c => c.s[4] === i && hasChar(c));
+const wearing = c => KEYS.every((k, j) => MySkin[k] === c.s[j]);
+
+const css = document.createElement('style');
+css.textContent = '.shop-bal{font-family:var(--display);font-size:30px;color:var(--amber);letter-spacing:.04em}.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;width:min(640px,100%)}.shop-card{background:var(--panel);border:1px solid var(--edge);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}.shop-card.on{border-color:var(--amber)}.shop-card .nm{font-family:var(--display);letter-spacing:.05em;font-size:16px}.shop-card .tg{color:var(--dim);font-size:12px;min-height:2.4em}.shop-fig{display:flex;gap:3px;align-items:center}.shop-fig i{display:block;width:22px;height:22px;border:2px solid #000;outline:1px solid var(--edge)}.shop-fig b{font:700 11px var(--display);color:var(--dim);margin-left:6px;letter-spacing:.06em}.shop-card .btn{width:100%;padding:6px 10px}.shop-card .btn[disabled]{opacity:.5;cursor:default}.chip.locked{opacity:.35;text-decoration:line-through}';
+document.head.appendChild(css);
+
+const main = document.querySelector('#scr-main .col'), sb = el('button', 'btn', 'Shop'); sb.id = 'm-shop';
+main.insertBefore(sb, $('m-custom').nextSibling);
+const sec = el('section', 'screen'); sec.id = 'scr-shop'; sec.style.maxWidth = '700px';
+sec.innerHTML = '<h2>Shop</h2><p class="lead">Earn coins at the end of every Battle Royale match. The higher you place, the more you get, plus a bonus for every elimination and for winning. Spend them on new characters. Colors are free: change them any time in Character.</p><div class="card" style="width:min(640px,100%)"><label>Your coins</label><div class="shop-bal" id="shop-bal"></div></div><div id="shop-list" class="shop-grid"></div><div class="col"><button class="btn small" id="shop-back">Back</button></div>';
+$('menu').insertBefore(sec, $('menutoast'));
+
+function label() { sb.textContent = 'Shop · ' + coins() + ' coins'; $('shop-bal').textContent = coins() + ' coins'; }
+function sanitize() { if (!hatOwned(MySkin.hat)) { MySkin.hat = 0; Store.set('skin', MySkin); } }
+function apply(c) { KEYS.forEach((k, j) => { MySkin[k] = c.s[j]; }); Store.set('skin', MySkin); UI.buildCustomize(); if (UI.drawAvatar) UI.drawAvatar(); }
+function render() {
+  label(); const host = $('shop-list'); host.innerHTML = '';
+  for (const c of CHARS) {
+    const has = hasChar(c), on = wearing(c), card = el('div', 'shop-card' + (on ? ' on' : ''));
+    card.appendChild(el('div', 'nm', esc(c.name)));
+    const fig = el('div', 'shop-fig');
+    [SKIN_TONES[c.s[0]], HAIR_COLORS[c.s[1]], SHIRT_COLORS[c.s[2]], PANTS_COLORS[c.s[3]]].forEach(col => { const i = el('i'); i.style.background = col; fig.appendChild(i); });
+    if (c.s[4]) fig.appendChild(el('b', '', esc(HAT_NAMES[c.s[4]]).toUpperCase()));
+    card.appendChild(fig); card.appendChild(el('div', 'tg', esc(c.tag)));
+    const b = el('button', 'btn small');
+    if (has) {
+      b.textContent = on ? 'Equipped' : 'Equip'; b.disabled = on;
+      b.addEventListener('click', () => { Snd.play('click'); apply(c); render(); });
+    } else {
+      b.textContent = 'Buy · ' + c.price;
+      b.addEventListener('click', () => {
+        if (coins() < c.price) { Snd.play('denied'); UI.toastMenu('Not enough coins. You need ' + (c.price - coins()) + ' more.'); return; }
+        Store.set('coins', coins() - c.price); const o = ownedList(); o.push('char:' + c.id); Store.set('owned', o);
+        Snd.play('win', { vol: 0.2 }); apply(c); render();
+      });
+    }
+    card.appendChild(b); host.appendChild(card);
+  }
+}
+sb.addEventListener('click', () => { Snd.init(); Snd.play('click'); render(); UI.showScreen('shop'); });
+$('shop-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen('main'); });
+
+/* hats you do not own yet are locked in the Character screen; colors are never locked */
+function lock() {
+  const host = $('custom-opts'); if (!host) return;
+  for (const row of host.querySelectorAll('.crow2')) {
+    const l = row.querySelector('label'); if (!l || l.textContent !== 'Hat') continue;
+    Array.from(row.querySelectorAll('.chip')).forEach((b, i) => {
+      if (hatOwned(i)) return;
+      const n = b.cloneNode(true); b.replaceWith(n); n.classList.add('locked'); n.title = 'Unlocked by a character in the Shop';
+      n.addEventListener('click', () => { Snd.play('denied'); UI.toastMenu('This hat comes with a character in the Shop.'); });
+    });
+  }
+}
+const _bc = UI.buildCustomize;
+UI.buildCustomize = function () { sanitize(); const r = _bc.apply(this, arguments); lock(); return r; };
+
+/* coins at the end of a Battle Royale match */
+let paidFor = null;
+const _se = UI.showEnd;
+UI.showEnd = function (win) {
+  const r = _se.apply(this, arguments);
+  try {
+    if (G.mode !== 'br' || paidFor === G.worldMeta) return r; paidFor = G.worldMeta;
+    const N = Math.max(1, G.totalPlayers | 0), p = Math.min(N, Math.max(1, G.placement | 0 || N)), k = G.P && G.P.kills | 0;
+    const base = N > 1 ? Math.round(10 + 90 * (N - p) / (N - 1)) : 10, total = base + (win ? 100 : 0) + k * 20;
+    Store.set('coins', coins() + total); label();
+    $('end-stats').insertAdjacentHTML('beforeend', '<div><b>+' + total + '</b><span>Coins</span></div>');
+    $('end-sub').textContent += '  Placement ' + base + (win ? ' + win bonus 100' : '') + ' + eliminations ' + (k * 20) + ' = ' + total + ' coins.';
+  } catch (e) { console.error(e); }
+  return r;
+};
+UI.buildCustomize(); label();
+})(); } catch (e) { console.error('shop failed to load', e); }
+</script>
