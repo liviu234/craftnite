@@ -902,26 +902,26 @@ function rollWeapon(rng, weights, minRar) {
   if (id === 'sniper' && r < 2) r = 2;
   return mkStack(id, 1, r);
 }
-function ammoFor(id, rng) { const it = ITEM[id]; if (!it.ammo) return null; const base = { ammo_l: 40, ammo_m: 30, ammo_h: 10, shells: 10, arrow: 12, bolt: 8 }[it.ammo]; return mkStack(it.ammo, Math.round(base * (0.8 + rng() * 0.6))); }
+function ammoFor(id, rng) { const it = ITEM[id]; if (!it.ammo) return null; const base = { ammo_l: 40, ammo_m: 30, ammo_h: 10, shells: 10, arrow: 12, bolt: 8 }[it.ammo]; return mkStack(it.ammo, Math.round(base * 0.7 * (0.8 + rng() * 0.6))); }
 function genLoot(kind, rng) {
   const w = CHEST_RARITY[clamp(kind, 0, 3)], out = [];
-  const nW = kind === 0 ? (rng() < 0.8 ? 1 : 0) : kind === 1 ? 1 + (rng() < 0.25 ? 1 : 0) : kind === 2 ? 2 : 2;
+  const nW = kind === 0 ? (rng() < 0.5 ? 1 : 0) : kind === 1 ? 1 : kind === 2 ? 1 + (rng() < 0.4 ? 1 : 0) : 1 + (rng() < 0.6 ? 1 : 0);
   for (let i = 0; i < nW; i++) {
     const wp = rollWeapon(rng, w); if (wp.id === 'pickaxe' || wp.id === 'sword') { out.push(wp); continue; }
     out.push(wp); const am = ammoFor(wp.id, rng); if (am) out.push(am);
   }
   const heals = ['bandage', 'bandage', 'shield_s', 'shield_s', 'medkit', 'shield_b', 'steak'];
-  const nH = kind === 0 ? 1 : kind === 1 ? 2 : 1 + (rng() < 0.6 ? 1 : 0);
+  const nH = kind === 0 ? (rng() < 0.5 ? 1 : 0) : kind === 1 ? 1 : 1 + (rng() < 0.3 ? 1 : 0);
   for (let i = 0; i < nH; i++) { const h = heals[Math.floor(rng() * (kind >= 2 ? heals.length : 4))]; out.push(mkStack(h, h === 'bandage' ? 3 : 1)); }
   const resPool = kind === 0 ? { wood: 20, stone: 14, iron: 6, fiber: 8, copper: 4 } : kind === 1 ? { iron: 14, copper: 12, crystal: 4, scrap: 6, stone: 8, fiber: 5 } : { iron: 12, copper: 10, crystal: 10, frost: 3, ember: 3, aether: 3, scrap: 4 };
-  const nR = kind === 0 ? 1 : kind === 1 ? 1 + (rng() < 0.6 ? 1 : 0) : 2 + (rng() < 0.4 ? 1 : 0);
+  const nR = kind === 0 ? 1 : kind === 1 ? 1 + (rng() < 0.3 ? 1 : 0) : 1 + (rng() < 0.5 ? 1 : 0);
   for (let i = 0; i < nR; i++) {
     const rid = wpick(rng, resPool), base = { wood: 24, stone: 20, iron: 8, copper: 8, crystal: 3, scrap: 4, fiber: 6, frost: 3, ember: 3, aether: 3 }[rid];
-    out.push(mkStack(rid, Math.max(1, Math.round(base * 0.85 * (0.6 + rng() * 0.8)))));
+    out.push(mkStack(rid, Math.max(1, Math.round(base * 0.6 * (0.6 + rng() * 0.8)))));
   }
-  if (kind >= 1 && rng() < 0.35) out.push(mkStack(rng() < 0.5 ? 'grenade' : 'smoke', 1 + Math.floor(rng() * 2)));
-  if (kind >= 2 && rng() < 0.45) out.push(mkStack(rng() < 0.5 ? 'barrier' : 'jumppad', 1));
-  if (kind === 3) { out.push(mkStack('alloy', 3 + Math.floor(rng() * 4))); }
+  if (kind >= 1 && rng() < 0.2) out.push(mkStack(rng() < 0.5 ? 'grenade' : 'smoke', 1 + Math.floor(rng() * 2)));
+  if (kind >= 2 && rng() < 0.25) out.push(mkStack(rng() < 0.5 ? 'barrier' : 'jumppad', 1));
+  if (kind === 3) { out.push(mkStack('alloy', 2 + Math.floor(rng() * 3))); }
   return out;
 }
 'use strict';
@@ -1261,10 +1261,31 @@ const BIOMES = [
   { name: 'Ruined City', grass: [0.9, 1.0, 0.78], water: [0.85, 1.0, 1.0], color: '#8a8f99' }
 ];
 
+/* ---------- map layouts: each one changes which biomes the island is made of ---------- */
+function mapBag(n, rng, spec, fill) {
+  const bag = [], sc = n / 16;
+  for (const k in spec) { const c = Math.max(0, Math.round(spec[k] * sc)); for (let i = 0; i < c; i++) bag.push(+k); }
+  while (bag.length < n) bag.push(fill[Math.floor(rng() * fill.length)]);
+  bag.length = n; return bag;
+}
+const MAP_TYPES = [
+  { id: 'classic', name: 'Classic Isles', bag: null },
+  { id: 'frozen', name: 'Frozen North', bag: (n, rng) => mapBag(n, rng, { [BIO.SNOW]: 8, [BIO.FOREST]: 3, [BIO.VOLCANO]: 1, [BIO.CITY]: 1, [BIO.SWAMP]: 1 }, [BIO.PLAINS, BIO.SNOW]) },
+  { id: 'scorched', name: 'Scorched Wastes', bag: (n, rng) => mapBag(n, rng, { [BIO.DESERT]: 7, [BIO.VOLCANO]: 2, [BIO.CITY]: 2, [BIO.PLAINS]: 2 }, [BIO.DESERT, BIO.PLAINS]) },
+  { id: 'deepwoods', name: 'Deep Woods', bag: (n, rng) => mapBag(n, rng, { [BIO.FOREST]: 8, [BIO.SWAMP]: 4, [BIO.PLAINS]: 2, [BIO.CITY]: 1, [BIO.SNOW]: 1 }, [BIO.FOREST]) },
+  { id: 'metropolis', name: 'Metropolis', bag: (n, rng) => mapBag(n, rng, { [BIO.CITY]: 4, [BIO.PLAINS]: 5, [BIO.FOREST]: 3, [BIO.DESERT]: 1, [BIO.VOLCANO]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'archipelago', name: 'Archipelago', bag: (n, rng) => mapBag(n, rng, { [BIO.OCEAN]: 5, [BIO.PLAINS]: 3, [BIO.FOREST]: 3, [BIO.SNOW]: 1, [BIO.DESERT]: 1, [BIO.VOLCANO]: 1, [BIO.CITY]: 1, [BIO.SWAMP]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'wildlands', name: 'Wildlands', bag: (n, rng) => mapBag(n, rng, { [BIO.SWAMP]: 4, [BIO.VOLCANO]: 2, [BIO.SNOW]: 3, [BIO.DESERT]: 3, [BIO.FOREST]: 3, [BIO.CITY]: 1 }, [BIO.PLAINS]) }
+];
+const MAP_BY_ID = {}; MAP_TYPES.forEach(m => { MAP_BY_ID[m.id] = m; });
+// the same seed always gives the same map, so multiplayer rooms and saved worlds stay in sync
+function pickMapId(seed) { const r = mulberry32(((seed | 0) ^ 0x3A7C15) >>> 0); r(); return MAP_TYPES[Math.floor(r() * MAP_TYPES.length)].id; }
+
 class World {
   constructor(o) {
     this.seed = (o.seed == null ? Math.floor(Math.random() * 1e9) : o.seed) | 0;
     this.type = o.type || 'island';
+    this.map = MAP_BY_ID[o.map] ? o.map : 'classic';
     this.cw = o.cw || 16; this.cd = o.cd || o.cw || 16;
     this.W = this.cw * CS; this.D = this.cd * CS;
     this.N = o.N || clamp(Math.round(this.W / 42), 4, 9);
@@ -1397,6 +1418,7 @@ class World {
     }
     const n = inner.length;
     let bag = this.bag;
+    if (!bag && MAP_BY_ID[this.map].bag) bag = MAP_BY_ID[this.map].bag(n, rng);
     if (!bag) {
       const sc = n / 16;
       bag = [];
@@ -1965,14 +1987,14 @@ Object.assign(World.prototype, {
     const nI = Math.max(2, Math.round(this.W / 70)); for (let k = 0; k < nI; k++) this.genFloatingIsland(rng);
     for (let k = 0; k < Math.max(1, Math.round(this.W / 120)); k++) this.genSunken(rng);
     // scattered surface chests (wooden)
-    const nC = Math.round(this.W * this.D / 900);
+    const nC = Math.round(this.W * this.D / 900 * 1.1);
     for (let k = 0; k < nC; k++) {
       const x = 8 + Math.floor(rng() * (this.W - 16)), z = 8 + Math.floor(rng() * (this.D - 16)), h = this.colH[x + z * this.W], bio = this.biomeAt(x, z);
       if (h < SEA + 1 || bio === BIO.OCEAN || this.getBlock(x, h + 1, z) !== 0 || !B_SOLID[this.getBlock(x, h, z)]) continue;
       this.addChest(x, h + 1, z, rng() < 0.15 ? 1 : 0);
     }
     // underground chests in caves (air cell with solid floor, deep)
-    for (let k = 0; k < Math.round(this.W * this.D / 1500); k++) {
+    for (let k = 0; k < Math.round(this.W * this.D / 1500 * 1.1); k++) {
       for (let t = 0; t < 40; t++) {
         const x = 6 + Math.floor(rng() * (this.W - 12)), z = 6 + Math.floor(rng() * (this.D - 12)), y = 8 + Math.floor(rng() * 28);
         if (this.getBlock(x, y, z) === 0 && B_SOLID[this.getBlock(x, y - 1, z)] && this.getBlock(x, y + 1, z) === 0) { this.addChest(x, y, z, rng() < 0.3 ? 2 : 1); this.lootSpots.push({ x, y, z, kind: 1 }); break; }
@@ -4475,9 +4497,9 @@ async function startSession(mode, opts) {
   G.dayLen = mode === 'br' ? 1800 : mode === 'creative' ? 1e9 : 1200; G.day = opts.day || 1; G.freezeTime = mode === 'creative';
   let world, sv = opts.save || null;
   const size = opts.size || (mode === 'br' ? 14 : mode === 'survival' ? 13 : 12);
-  if (sv) { world = new World({ seed: sv.seed, cw: sv.cw, cd: sv.cd, type: sv.type }); }
-  else world = new World({ seed: opts.seed != null ? opts.seed : Math.floor(Math.random() * 1e9), cw: size, cd: size, type: mode === 'creative' ? (opts.worldType || 'flat') : 'island' });
-  G.world = world; G.worldMeta = { seed: world.seed, cw: world.cw, cd: world.cd, type: world.type };
+  if (sv) { world = new World({ seed: sv.seed, cw: sv.cw, cd: sv.cd, type: sv.type, map: sv.map }); }
+  else { const sd = opts.seed != null ? opts.seed : Math.floor(Math.random() * 1e9); world = new World({ seed: sd, cw: size, cd: size, type: mode === 'creative' ? (opts.worldType || 'flat') : 'island', map: MAP_BY_ID[opts.map] ? opts.map : pickMapId(sd) }); }
+  G.world = world; G.worldMeta = { seed: world.seed, cw: world.cw, cd: world.cd, type: world.type, map: world.map };
   await runGenerator(world, p => UI.loading(true, 'Generating world…', p * 0.7));
   if (sv) { world.applyEdits(sv.edits || []); for (const k of (sv.opened || [])) { world.opened.add(k); const ch = world.chests.get(k); if (ch) world.chestCd.set(k, CHEST_CD[ch.kind] || 30); } for (const [k, id] of world.edits) if (id === BK.sapling) world.growing.push({ k, t: rnd(10, 30) }); }
   G.rend.setWorld(world);
@@ -4751,7 +4773,7 @@ const Save = {
   key(mode, slot) { return mode === 'survival' ? 'save.survival' : 'save.creative.' + slot; },
   pack(mode) {
     const w = G.world, P = G.P;
-    return { v: 1, mode, seed: w.seed, cw: w.cw, cd: w.cd, type: w.type, edits: w.exportEdits(), opened: Array.from(w.opened), tod: G.tod, day: G.day, spawn: G.spawnPt || null, time: Date.now(), name: (mode === 'survival' ? 'Survival' : 'Creative') + ' world',
+    return { v: 1, mode, seed: w.seed, cw: w.cw, cd: w.cd, type: w.type, map: w.map, edits: w.exportEdits(), opened: Array.from(w.opened), tod: G.tod, day: G.day, spawn: G.spawnPt || null, time: Date.now(), name: (mode === 'survival' ? 'Survival' : 'Creative') + ' world',
       player: { x: P.x, y: P.y, z: P.z, yaw: P.yaw, hp: P.hp, sh: P.sh, sel: P.sel, inv: P.inv.map(s => s ? { id: s.id, n: s.n, r: s.r || 0, mag: s.mag, fx: s.fx } : null) } };
   },
   write(mode, slot, silent) {
@@ -5621,7 +5643,7 @@ boot();
 try { (function () {
 'use strict';
 if (typeof G === 'undefined' || !G.rend || typeof UI === 'undefined') return;
-const MP = { joining: false, noMonsters: false, noAnimals: false, size: 12, spawnT: 0, active: false, busy: false, room: null, code: '', me: null, offs: [], remotes: new Map(), q: [], pend: new Map(), log: new Map(), syncQ: [], synced: new Set(), applying: false, noEcho: false, t: 0, tPres: 0, tFlush: 0, tBoard: 0, lastPres: '', respawnAt: 0, conn: true };
+const MP = { joining: false, noMonsters: false, noAnimals: false, size: 12, map: '', spawnT: 0, active: false, busy: false, room: null, code: '', me: null, offs: [], remotes: new Map(), q: [], pend: new Map(), log: new Map(), syncQ: [], synced: new Set(), applying: false, noEcho: false, t: 0, tPres: 0, tFlush: 0, tBoard: 0, lastPres: '', respawnAt: 0, conn: true };
 const DAY = 1200, num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d || 0), r1 = v => Math.round(v * 10) / 10;
 const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 1000000000; };
 const rcode = () => Math.random().toString(36).slice(2, 7), own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -5641,7 +5663,7 @@ setInterval(lobbyWatch, 400); document.addEventListener('pointerdown', () => { t
 { const ub = $('m-uisound'); if (ub) { const ul = () => { ub.textContent = 'UI sounds: ' + (Settings.uiSound ? 'On' : 'Off'); }; ul(); setInterval(ul, 600); ub.addEventListener('click', () => { Settings.uiSound = !Settings.uiSound; saveSettings(); try { Snd.init(); Snd.play('click'); } catch (e) { } ul(); }); } }
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div id="mp-sizebox"><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">You choose the size. Friends who join with your code get it automatically. Bigger worlds take longer to generate, so keep it small on phones.</div></div><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div id="mp-sizebox"><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">You choose the size. Friends who join with your code get it automatically. Bigger worlds take longer to generate, so keep it small on phones.</div><label for="mp-map" style="margin-top:10px">Map</label><select id="mp-map" class="txt" style="width:100%"></select><div class="lead" style="font-size:13px;margin:0">You choose the map too. Everyone who joins your room gets the same one. Random picks one from your room code.</div></div><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
 css.textContent += '.mpl-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(43,55,80,.6);font-family:var(--display);letter-spacing:.06em;font-size:16px}.mpl-row em{font-style:normal;color:var(--amber);font-size:12px;letter-spacing:.12em}.mpl-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mpl-msg{margin-top:10px}';
 const csec = el('section', 'screen'); csec.id = 'scr-mpc';
@@ -5662,6 +5684,10 @@ $('mp-monsters').addEventListener('change', () => { Store.set('mpmonsters', $('m
 const sizeIn = $('mp-size'), sizeLbl = () => { const n = parseInt(sizeIn.value, 10) || 12; $('mp-size-v').textContent = (n * 16) + ' × ' + (n * 16) + ' blocks'; };
 { let sv = parseInt(Store.get('mpsize', 12), 10); if (!(sv >= 6 && sv <= 20)) sv = 12; sizeIn.value = sv; sizeLbl(); }
 sizeIn.addEventListener('input', () => { sizeLbl(); Store.set('mpsize', parseInt(sizeIn.value, 10)); });
+const mapSel = $('mp-map');
+mapSel.innerHTML = '<option value="">Random</option>' + MAP_TYPES.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
+{ const sm = Store.get('mpmap', ''); mapSel.value = MAP_BY_ID[sm] ? sm : ''; }
+mapSel.addEventListener('change', () => { Store.set('mpmap', mapSel.value); Snd.play('click'); });
 let hostMode = false;
 const setMode = host => {
   hostMode = !!host; $('mp-sizebox').style.display = host ? '' : 'none';
@@ -5688,7 +5714,7 @@ async function join() {
     let R = null; try { const C = window.claude; R = C && C.use ? await C.use('room') : null; } catch (x) { R = null; }
     if (!R && !window.CraftnitePeerRoom) throw new Error('Multiplayer could not start in this browser.');
     const say = t => { st(t); try { if (MP.active && t) HUD.toast(t); } catch (x) { } };
-    const size = hostMode ? Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)) : 12, key = 'cn-' + code; MP.size = size;
+    const size = hostMode ? Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)) : 12, key = 'cn-' + code; MP.size = size; MP.map = hostMode && MAP_BY_ID[mapSel.value] ? mapSel.value : '';
     MP.room = R ? await R.join(key) : await window.CraftnitePeerRoom.join(key, say); MP.code = code; st('');
     MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); Store.set('mpmonsters', !MP.noMonsters);
     lobbyEnter();
@@ -5710,11 +5736,19 @@ function lobbyRender(S) {
 }
 function lobbyRefresh() {
   if (!L.on || L.starting || !MP.room) return;
-  const S = CraftniteLobby.state(MP.room.peers()); adoptSize(S);
+  const S = CraftniteLobby.state(MP.room.peers()); adoptSize(S); adoptMap(S);
   if (S.started) { lobbyBegin(); return; }
   lobbyRender(S);
 }
-const mplInfo = () => { $('mpl-info').textContent = 'Room code: ' + MP.code.toUpperCase() + ' · world ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''); };
+const mplInfo = () => { $('mpl-info').textContent = 'Room code: ' + MP.code.toUpperCase() + ' · world ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks · ' + MAP_BY_ID[mpMapId()].name + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''); };
+// the map actually used: the host's pick, or the seeded random one when the host chose Random
+const mpMapId = () => MAP_BY_ID[MP.map] ? MP.map : pickMapId(hashStr('cn-' + MP.code));
+function adoptMap(S) {
+  if (!S || !S.host || !S.host.presence) return;
+  const hp = S.host.presence.mp, hm = MAP_BY_ID[hp] ? hp : '';
+  if (hm !== (MP.map || '')) { MP.map = hm; mplInfo(); }
+  if (S.me && (S.me.presence.mp || '') !== hm) { try { MP.room.presence({ mp: hm || null }).catch(() => { }); } catch (e) { } }
+}
 function adoptSize(S) {
   const hs = S && S.host && S.host.presence && S.host.presence.sz;
   if (typeof hs === 'number' && hs >= 6 && hs <= 20) {
@@ -5724,7 +5758,7 @@ function adoptSize(S) {
 }
 function lobbyEnter() {
   const room = MP.room; L.on = true; L.starting = false; MP.conn = true;
-  room.presence({ lb: 1, sz: MP.size, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
+  room.presence({ lb: 1, sz: MP.size, mp: MP.map || null, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
   L.offs = [room.onPeers(lobbyRefresh), room.onConnection(c => { MP.conn = c; lobbyRefresh(); })];
   clearInterval(L.timer); L.timer = setInterval(lobbyRefresh, 500);
   mplInfo();
@@ -5737,9 +5771,9 @@ function lobbyLeave() {
 async function lobbyBegin() {
   if (L.starting) return; L.starting = true; lobbyStop(); MP.joining = true;
   try {
-    try { adoptSize(CraftniteLobby.state(MP.room.peers())); } catch (e) { }
+    try { const S0 = CraftniteLobby.state(MP.room.peers()); adoptSize(S0); adoptMap(S0); } catch (e) { }
     const key = 'cn-' + MP.code;
-    await startSession('survival', { seed: hashStr(key), size: MP.size });
+    await startSession('survival', { seed: hashStr(key), size: MP.size, map: mpMapId() });
     try { MP.room.presence({ lb: null }).catch(() => { }); } catch (e) { }
     start();
   } catch (e) {
@@ -5764,7 +5798,7 @@ function start() {
   kit(P); P.kills = 0; G.kills = 0; P.invuln = 3; MP.spawnT = 2;
   MP.offs = [room.on('ev', onEv), room.onPeers(onPeers), room.onConnection(c => { MP.conn = c; if (c) MP.lastPres = ''; })];
   board.style.display = '';
-  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · ' + (MP.size * 16) + '×' + (MP.size * 16) + ' · share the code' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''), '#6ab0ff');
+  HUD.banner('MULTIPLAYER', 'Room ' + MP.code.toUpperCase() + ' · ' + (MP.size * 16) + '×' + (MP.size * 16) + ' · ' + MAP_BY_ID[mpMapId()].name + ' · share the code' + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''), '#6ab0ff');
 }
 function stop() {
   if (!MP.active) return; MP.active = false;
