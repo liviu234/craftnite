@@ -395,7 +395,7 @@ const Store = {
 
 /* ---------- settings ---------- */
 const DEFAULT_SETTINGS = {
-  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, sound: true, uiSound: true, volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
+  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, sound: true, uiSound: true, sunShadows: true, volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
   invertY: false, crosshair: true, difficulty: 'normal', showFps: false, hints: true, quality: 'high'
 };
 const Settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -1365,10 +1365,10 @@ class World {
   markDirty(ch, lx, lz, y) {
     ch.dirty = true;
     const cx = ch.cx, cz = ch.cz;
-    if (lx === 0 && cx > 0) this.chunks[cx - 1 + cz * this.cw].dirty = true;
-    if (lx === 15 && cx < this.cw - 1) this.chunks[cx + 1 + cz * this.cw].dirty = true;
-    if (lz === 0 && cz > 0) this.chunks[cx + (cz - 1) * this.cw].dirty = true;
-    if (lz === 15 && cz < this.cd - 1) this.chunks[cx + (cz + 1) * this.cw].dirty = true;
+    /* sky light now spreads up to 2 blocks sideways, so edits within 2 blocks of a chunk edge also re-mesh the neighbour (and the corner chunk) */
+    const mx = lx <= 2 ? -1 : lx >= 13 ? 1 : 0, mz = lz <= 2 ? -1 : lz >= 13 ? 1 : 0;
+    const mark = (ax, az) => { const X = cx + ax, Z = cz + az; if (X >= 0 && Z >= 0 && X < this.cw && Z < this.cd) this.chunks[X + Z * this.cw].dirty = true; };
+    if (mx) mark(mx, 0); if (mz) mark(0, mz); if (mx && mz) mark(mx, mz);
     // lighting of neighbours can change with heightmap -> cheap approximation: dirty 4 neighbours too when column heightmap changed near edge handled above
   }
   chunkAt(x, z) { return this.chunks[(x >> 4) + (z >> 4) * this.cw]; }
@@ -2061,13 +2061,13 @@ Object.assign(World.prototype, {
 /* ===================== CRAFTNITE :: 06 renderer (chunk meshing, sky, particles, models) ===================== */
 const FACES = [
   { n: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], shade: 1.0, ti: 0 },
-  { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.5, ti: 2 },
+  { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.6, ti: 2 },
   { n: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], shade: 0.8, ti: 1 },
   { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], shade: 0.8, ti: 1 },
-  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.68, ti: 1 },
-  { n: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.68, ti: 1 }
+  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.74, ti: 1 },
+  { n: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.74, ti: 1 }
 ];
-const AO_LEVEL = [0.5, 0.68, 0.84, 1.0];
+const AO_LEVEL = [0.6, 0.75, 0.88, 1.0];
 const T_PASS = new Uint8Array(256); // 1 = transparent pass (water, ice, glass)
 T_PASS[BK.water] = 1; T_PASS[BK.ice] = 1; T_PASS[BK.glass] = 1;
 
@@ -2134,7 +2134,24 @@ function meshChunk(world, ch) {
   const W = world.W, uvT = 1 / ATLAS_N, eps = 0.0008;
   const tmpCol = [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]];
   const uvs = [[0, 0], [0, 0], [0, 0], [0, 0]];
-  const skyAt = (ox, oy, oz) => { const sy = world.skyY(ox, oz); return oy >= sy ? 1 : Math.max(0, 1 - (sy - oy) * 0.2); };
+  /* sky light: fades gently with depth under cover, and spreads sideways from open sky (soft shadow edges, brighter caves mouths and eaves) */
+  const opq = (x, y, z) => B_OPAQUE[world.getBlock(x, y, z)];
+  const skyCol = (x, y, z) => { const sy = world.skyY(x, z); return y >= sy ? 1 : Math.max(0, 1 - (sy - y) * 0.11); };
+  const skyAt = (ox, oy, oz) => {
+    let s = skyCol(ox, oy, oz); if (s >= 1) return 1;
+    for (let d = 0; d < 4; d++) {
+      const dx = d === 0 ? 1 : d === 1 ? -1 : 0, dz = d === 2 ? 1 : d === 3 ? -1 : 0;
+      if (opq(ox + dx, oy, oz + dz)) continue;
+      let v = skyCol(ox + dx, oy, oz + dz) * 0.8; if (v > s) s = v;
+      if (!opq(ox + dx * 2, oy, oz + dz * 2)) { v = skyCol(ox + dx * 2, oy, oz + dz * 2) * 0.62; if (v > s) s = v; }
+    }
+    for (let d = 0; d < 4; d++) {
+      const dx = d & 1 ? 1 : -1, dz = d & 2 ? 1 : -1;
+      if (opq(ox + dx, oy, oz) || opq(ox + dx, oy, oz + dz) || opq(ox, oy, oz + dz)) continue;
+      const v = skyCol(ox + dx, oy, oz + dz) * 0.62; if (v > s) s = v;
+    }
+    return s;
+  };
   for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
     const x = x0 + lx, z = z0 + lz, ci = x + z * W, base = WH * (lx + CS * lz);
     const tgr = world.tg[ci * 3] / 255, tgg = world.tg[ci * 3 + 1] / 255, tgb = world.tg[ci * 3 + 2] / 255;
@@ -2201,24 +2218,47 @@ function meshChunk(world, ch) {
       }
     }
   }
+  /* shadow-caster height per column (solid blocks and leaves), used by the sun-shadow shader */
+  { const sh = ch.sh || (ch.sh = new Uint8Array(CS * CS)), top = Math.min(WH - 1, ch.maxY + 1);
+    for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) { const base = WH * (lx + CS * lz); let y = top; while (y > 0) { const id = data[base + y]; if (B_OPAQUE[id] || (B_SOLID[id] && !B_LIQ[id] && !B_CROSS[id])) break; y--; } sh[lx + CS * lz] = y > 0 ? y + 1 : 0; }
+    world.shVer = (world.shVer | 0) + 1; }
   return { s: bufToGeo(S), t: bufToGeo(T) };
 }
 
 /* ===================== shader material for terrain ===================== */
 const TERRAIN_VS = `
 attribute vec3 color; attribute vec2 light;
-varying vec2 vUv; varying vec3 vCol; varying vec2 vLight; varying float vDist; varying float vY;
-void main(){ vUv=uv; vCol=color; vLight=light; vec4 mv=modelViewMatrix*vec4(position,1.0); vDist=length(mv.xyz); vY=(modelMatrix*vec4(position,1.0)).y; gl_Position=projectionMatrix*mv; }`;
+varying vec2 vUv; varying vec3 vCol; varying vec2 vLight; varying float vDist; varying float vY; varying vec3 vW;
+void main(){ vUv=uv; vCol=color; vLight=light; vec4 mv=modelViewMatrix*vec4(position,1.0); vDist=length(mv.xyz); vec4 wp=modelMatrix*vec4(position,1.0); vY=wp.y; vW=wp.xyz; gl_Position=projectionMatrix*mv; }`;
 const TERRAIN_FS = `
 precision highp float;
 uniform sampler2D map; uniform float uSun; uniform vec3 uFog; uniform float uNear; uniform float uFar; uniform float uAlpha; uniform float uCut; uniform vec3 uTint; uniform float uTime; uniform float uWater;
-varying vec2 vUv; varying vec3 vCol; varying vec2 vLight; varying float vDist; varying float vY;
+uniform sampler2D uHM; uniform vec2 uWD; uniform vec3 uSunDir; uniform float uShadow;
+varying vec2 vUv; varying vec3 vCol; varying vec2 vLight; varying float vDist; varying float vY; varying vec3 vW;
+/* sun visibility: march from the surface toward the sun through the column-height texture (soft penumbra from how deep the ray sinks into a column) */
+float sunVis(vec3 n){
+  vec3 o=vW+n*0.07; float vis=1.0;
+  for(int i=0;i<30;i++){
+    float fi=float(i);
+    float t=fi<16.0 ? 0.15+fi*0.7 : 11.35+(fi-15.0)*(fi-15.0)*0.2;
+    vec3 p=o+uSunDir*t;
+    if(p.y>113.0) break;
+    if(p.x<0.0||p.z<0.0||p.x>=uWD.x||p.z>=uWD.y) break;
+    float h=floor(texture2D(uHM,(floor(p.xz)+0.5)/uWD).r*255.0+0.5);
+    vis=min(vis,1.0-clamp((h-p.y)/1.2,0.0,1.0));
+    if(vis<=0.0) break;
+  }
+  return vis;
+}
 void main(){
+  vec3 fn=normalize(cross(dFdx(vW),dFdy(vW))); if(dot(fn,cameraPosition-vW)<0.0) fn=-fn;
   vec4 t=texture2D(map,vUv); if(t.a<uCut) discard;
-  float sky=vLight.x*uSun; float L=max(sky,vLight.y); L=0.07+0.93*L;
+  float sv=1.0; if(uShadow>0.001&&vDist<95.0) sv=sunVis(fn); float vk=mix(1.0,sv,uShadow);
+  float sky=vLight.x*uSun*(0.55+0.45*vk); float L=max(sky,vLight.y); L=(0.07+0.13*uSun)+(0.93-0.13*uSun)*L;
   vec3 c=t.rgb*vCol*L;
   c+=t.rgb*vec3(1.0,0.62,0.28)*vLight.y*0.38;
-  c*=mix(vec3(0.62,0.74,1.15),vec3(1.0),smoothstep(0.1,0.7,uSun*max(vLight.x,0.2)+vLight.y));
+  c*=mix(vec3(0.82,0.88,1.06),vec3(1.0),smoothstep(0.1,0.7,uSun*max(vLight.x,0.2)+vLight.y));
+  c*=mix(vec3(0.9,0.94,1.06),vec3(1.0),vk);
   c*=uTint;
   float f=smoothstep(uNear,uFar,vDist);
   c=mix(c,uFog,f);
@@ -2238,12 +2278,14 @@ class Renderer {
     this.atlasTex.magFilter = THREE.NearestFilter; this.atlasTex.minFilter = THREE.NearestFilter; this.atlasTex.generateMipmaps = false; this.atlasTex.flipY = false;
     this.uni = {
       map: { value: this.atlasTex }, uSun: { value: 1 }, uFog: { value: new THREE.Color(0x9ad0ff) }, uNear: { value: 60 }, uFar: { value: 110 },
-      uAlpha: { value: 1 }, uCut: { value: 0.45 }, uTint: { value: new THREE.Color(1, 1, 1) }, uTime: { value: 0 }, uWater: { value: 0 }
+      uAlpha: { value: 1 }, uCut: { value: 0.45 }, uTint: { value: new THREE.Color(1, 1, 1) }, uTime: { value: 0 }, uWater: { value: 0 },
+      uHM: { value: new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat) }, uWD: { value: new THREE.Vector2(1, 1) }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uShadow: { value: 0 }
     };
+    this.uni.uHM.value.needsUpdate = true; this.hmVer = -1; this.hmT = 0;
     const mk = (cut, alpha, trans) => {
       const u = {}; for (const k in this.uni) u[k] = this.uni[k];
       u.uCut = { value: cut }; u.uAlpha = { value: alpha };
-      return new THREE.ShaderMaterial({ uniforms: u, vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, transparent: !!trans, depthWrite: !trans, side: THREE.FrontSide });
+      return new THREE.ShaderMaterial({ uniforms: u, vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, extensions: { derivatives: true }, transparent: !!trans, depthWrite: !trans, side: THREE.FrontSide });
     };
     this.matS = mk(0.45, 1, false);
     this.matT = mk(0.02, 0.78, true);
@@ -2265,7 +2307,7 @@ class Renderer {
   }
   setWorld(world) {
     for (const [, m] of this.meshes) this.dropMesh(m);
-    this.meshes.clear(); this.queue.length = 0; this.world = world;
+    this.meshes.clear(); this.queue.length = 0; this.world = world; this.hmVer = -1; this.hmT = 0;
     this.world.rendererRef = this;
   }
   dropMesh(m) { if (m.s) { this.scene.remove(m.s); m.s.geometry.dispose(); } if (m.t) { this.scene.remove(m.t); m.t.geometry.dispose(); } }
@@ -2307,10 +2349,23 @@ class Renderer {
   buildSky() {
     this.skyG = new THREE.Group(); this.scene.add(this.skyG);
     const tex = (draw, s) => { const c = document.createElement('canvas'); c.width = c.height = s; draw(c.getContext('2d'), s); const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; return t; };
-    const sunT = tex((x, s) => { x.fillStyle = '#fff6c0'; x.fillRect(s * 0.2, s * 0.2, s * 0.6, s * 0.6); x.fillStyle = '#ffffff'; x.fillRect(s * 0.3, s * 0.3, s * 0.4, s * 0.4); }, 16);
+    /* sun: soft glow halo + blocky bright core (pixel style), drawn additively */
+    const sunT = tex((x, s) => {
+      const c = s / 2, g = x.createRadialGradient(c, c, s * 0.12, c, c, c);
+      g.addColorStop(0, 'rgba(255,236,150,0.85)'); g.addColorStop(0.3, 'rgba(255,200,90,0.38)'); g.addColorStop(0.65, 'rgba(255,170,60,0.12)'); g.addColorStop(1, 'rgba(255,160,50,0)');
+      x.fillStyle = g; x.fillRect(0, 0, s, s);
+      x.strokeStyle = 'rgba(255,225,120,0.35)'; x.lineWidth = s * 0.012; x.beginPath();
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + Math.PI / 8; x.moveTo(c + Math.cos(a) * s * 0.24, c + Math.sin(a) * s * 0.24); x.lineTo(c + Math.cos(a) * s * 0.46, c + Math.sin(a) * s * 0.46); }
+      x.stroke();
+      const q = s * 0.19; x.fillStyle = '#ffd24a'; x.fillRect(c - q, c - q, q * 2, q * 2);
+      x.fillStyle = '#ffeb8a'; x.fillRect(c - q * 0.82, c - q * 0.82, q * 1.64, q * 1.64);
+      x.fillStyle = '#fffbe0'; x.fillRect(c - q * 0.55, c - q * 0.55, q * 1.1, q * 1.1);
+    }, 128);
+    sunT.magFilter = THREE.LinearFilter; sunT.minFilter = THREE.LinearFilter; sunT.generateMipmaps = false;
     const moonT = tex((x, s) => { x.fillStyle = '#dfe6f5'; x.fillRect(s * 0.2, s * 0.2, s * 0.6, s * 0.6); x.fillStyle = '#b8c2dc'; x.fillRect(s * 0.3, s * 0.35, s * 0.15, s * 0.15); x.fillRect(s * 0.55, s * 0.55, s * 0.12, s * 0.12); }, 16);
     const mk = (t, sz) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), new THREE.MeshBasicMaterial({ map: t, transparent: true, fog: false, depthWrite: false })); m.renderOrder = -1; this.skyG.add(m); return m; };
-    this.sunM = mk(sunT, 70); this.moonM = mk(moonT, 50);
+    this.sunM = mk(sunT, 150); this.moonM = mk(moonT, 50);
+    if (THREE.AdditiveBlending) this.sunM.material.blending = THREE.AdditiveBlending;
     const sg = new THREE.BufferGeometry(), sp = [], r = mulberry32(99);
     for (let i = 0; i < 420; i++) { const a = r() * TAU, e = Math.asin(r() * 2 - 1); sp.push(Math.cos(a) * Math.cos(e) * 450, Math.sin(e) * 450, Math.sin(a) * Math.cos(e) * 450); }
     sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sp), 3));
@@ -2329,6 +2384,29 @@ class Renderer {
     for (let i = 0; i < 500; i++) this.rainSeed.push([r() * 40 - 20, r() * 24, r() * 40 - 20]);
     rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
     this.rainM = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xaac8ff, transparent: true, opacity: 0.45, fog: false })); this.rainM.frustumCulled = false; this.rainM.visible = false; this.scene.add(this.rainM);
+  }
+  /* sun shadows: keep a column-height texture of the world and aim the shader at the sun */
+  updateShadows(dt) {
+    const w = this.world, U = this.uni; if (!w) { U.uShadow.value = 0; return; }
+    const on = Settings.sunShadows, sd = this.sunDir;
+    U.uSunDir.value.copy(sd);
+    U.uShadow.value = on ? smooth(0.05, 0.22, sd.y) * (1 - this.weather * 0.85) * (1 - this.stormK * 0.5) * (this.waterK > 0.3 ? 0 : 1) : 0;
+    if (!on) return;
+    this.hmT -= dt; const ver = w.shVer | 0;
+    const fit = this.hmTex && this.hmTex.image.width === w.W && this.hmTex.image.height === w.D;
+    if (fit && (ver === this.hmVer || this.hmT > 0)) return;
+    this.hmT = 0.25; this.hmVer = ver;
+    const W = w.W, D = w.D;
+    if (!this.hmTex || this.hmTex.image.width !== W || this.hmTex.image.height !== D) {
+      const t = new THREE.DataTexture(new Uint8Array(W * D * 4), W, D, THREE.RGBAFormat); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.flipY = false;
+      this.hmTex = t; U.uHM.value = t; U.uWD.value.set(W, D);
+    }
+    const a = this.hmTex.image.data;
+    for (const ch of w.chunks) {
+      const src = ch.sh || ch.hm; if (!src) continue;
+      for (let lz = 0; lz < CS; lz++) { let i = ((ch.cz * CS + lz) * W + ch.cx * CS) * 4; for (let lx = 0; lx < CS; lx++, i += 4) { const hv = Math.max(src[lx + CS * lz], ch.hm ? ch.hm[lx + CS * lz] : 0); a[i] = hv > 255 ? 255 : hv; a[i + 3] = 255; } }
+    }
+    this.hmTex.needsUpdate = true;
   }
   updateSky(dt, cx, cy, cz) {
     const t = this.tod, ang = (t - 0.25) * TAU, sh = Math.sin(ang), day = smooth(-0.14, 0.22, sh);
@@ -2357,9 +2435,13 @@ class Renderer {
     this.sunL.intensity = 0.15 + 0.7 * day * (1 - this.weather * 0.5); this.sunL.position.set(cx + this.sunDir.x * 80, cy + Math.max(10, this.sunDir.y * 80), cz + this.sunDir.z * 80);
     // sky bodies follow camera
     this.skyG.position.set(cx, cy, cz);
+    this.updateShadows(dt);
+    /* the camera far plane is short (view distance), so shrink the whole sky dome inside it, keeping the same apparent size; before, the sun, moon and stars sat beyond it and were clipped away */
+    this.skyG.scale.setScalar(Math.min(1, this.camera.far * 0.9 / 460));
     this.sunM.position.copy(this.sunDir).multiplyScalar(380); this.sunM.lookAt(cx, cy, cz);
     this.moonM.position.copy(this.sunDir).multiplyScalar(-380); this.moonM.lookAt(cx, cy, cz);
     this.sunM.visible = sh > -0.2; this.moonM.visible = sh < 0.2;
+    { const m = this.sunM.material, low = clamp(1 - sh / 0.45, 0, 1); m.color.setRGB(1, 1 - low * 0.38, 1 - low * 0.62); m.opacity = clamp(1 - this.weather * 0.85 - this.stormK - this.waterK, 0, 1); }
     this.starM.material.opacity = clamp(1 - day * 1.6, 0, 1) * (1 - this.weather);
     this.starM.visible = this.starM.material.opacity > 0.02;
     // clouds
@@ -3773,6 +3855,19 @@ function followPath(b, goalX, goalZ, mul, dt) {
   const d = steer(b, tx, tz, mul, true);
   return gd;
 }
+/* bots that barely move for ~10 s while looting/searching get a fresh goal (a hunt if possible, else a new point of interest) */
+function idleWatch(b, br, state, dt) {
+  br.idleT = (br.idleT || 0) - dt; if (br.idleT > 0) return; br.idleT = 2;
+  const h = br.idleH || (br.idleH = []); h.push([b.x, b.z]); if (h.length > 5) h.shift();
+  if (h.length < 5 || state === 'fight' || state === 'flee' || state === 'zone' || br.mining || br.healUse) return;
+  if (Math.hypot(h[4][0] - h[0][0], h[4][1] - h[0][1]) > 2.5) return;
+  h.length = 0; br.path = null; br.invest = null;
+  if (br.goal && br.goal.type === 'drop') { if (!br.skip) br.skip = new Map(); br.skip.set(br.goal.d, G.t + 60); } /* unreachable item: leave it alone for a while */
+  const foes = enemiesOf(b).map(e => [Math.hypot(e.x - b.x, e.z - b.z), e]).sort((p, q) => p[0] - q[0]);
+  if (foes.length && botHasGun(b) && Math.random() < 0.7) br.goal = { type: 'hunt', t: foes[Math.floor(Math.random() * Math.min(3, foes.length))][1], ox: rnd(-8, 8), oz: rnd(-8, 8) };
+  else { const poi = botPickPOI(b); br.goal = { type: 'poi', x: poi.x, z: poi.z }; }
+  br.goalT = 12;
+}
 function stuckCheck(b, dt) {
   const br = b.brain;
   br.stuckT = (br.stuckT || 0);
@@ -3818,6 +3913,13 @@ function botBestWeaponIdx(b, dist) {
   return bi < 0 ? 0 : bi;
 }
 function botHasGun(b) { for (const s of b.inv) if (s && ITEM[s.id].type === 'gun') { const st = gunStats(s); if (s.mag > 0 || invCount(b.inv, st.ammo) > 0) return true; } return false; }
+/* would this bot actually pick up this gun? (same rule as botPickupNear, so bots don't walk to and stand on items they refuse) */
+function botGunWanted(b, s) {
+  const mine = b.inv.filter(q => q && ITEM[q.id].type === 'gun'); if (mine.length < 4) return true;
+  const sc = botScoreWeapon(s, 20); let ws = 1e9; for (const q of mine) { const v = botScoreWeapon(q, 20); if (v < ws) ws = v; }
+  const same = mine.find(q => q.id === s.id);
+  return sc > ws * 1.15 || !!(same && (s.r || 0) > (same.r || 0));
+}
 function botPickupNear(b) {
   for (let i = G.drops.length - 1; i >= 0; i--) {
     const d = G.drops[i]; if (d.age < d.delay) continue;
@@ -3878,7 +3980,7 @@ function botUpdate(b, dt) {
   const enemy = br.enemy, vis = enemy && G.t - br.lastSeenT < 0.4;
   const sx = br.ls ? br.ls.x : 0;
   const hpFrac = b.hp / b.maxHp, tot = b.hp + b.sh;
-  const outside = G.zone && !inZone(b.x, b.z, 2), zoneUrgent = G.zone && (outside || (G.zone.shrinking && !inZone(b.x, b.z, 14)));
+  const outside = G.zone && !inZone(b.x, b.z, 2), zoneUrgent = G.zone && (outside || (G.zone.shrinking && !inZone(b.x, b.z, Math.min(14, G.zone.r * 0.45))));
   // ---- healing decision ----
   if (!vis && (tot < 150 * D.heal * 1.3 || b.hp < 70 * D.heal * 1.4) && (G.t - b.lastHurt) > 1.0) {
     let pick = null;
@@ -3907,6 +4009,7 @@ function botUpdate(b, dt) {
   if (b.inWater) b.jumpHeld = true;
   // ---- apply movement flags ----
   if (b.sprint) b.speed = Math.max(b.speed, 5.3);
+  idleWatch(b, br, state, dt);
   stuckCheck(b, dt);
   if (br.strafeOverride) { }
   // aim vector
@@ -3926,8 +4029,17 @@ function botLoot(b, br, D, dt) {
   if (!br.goal || br.goalT <= 0 || (br.goal.type === 'drop' && !G.drops.includes(br.goal.d)) || (br.goal.type === 'chest' && G.world.opened.has(G.world.key(br.goal.c.x, br.goal.c.y, br.goal.c.z)))) {
     br.goal = null; br.goalT = 6 + Math.random() * 6;
     // visible drops
-    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
-    if (bd) br.goal = { type: 'drop', d: bd };
+    let bd = null, bdd = (needGun ? 40 : 24) * D.loot; for (const d of G.drops) { if (d.age < d.delay) continue; const it = ITEM[d.stack.id]; if (!(isGearType(it.type) || it.type === 'ammo' || it.type === 'heal' || it.type === 'throw' || (it.type === 'res' && needMats))) continue; if (it.type === 'tool' && it.id === 'pickaxe') continue; if (br.skip) { const sk = br.skip.get(d); if (sk && sk > G.t) continue; } if (it.type === 'gun' && !botGunWanted(b, d.stack)) continue; if (it.type === 'melee' || it.type === 'tool') { const have = b.inv.find(q => q && q.id === d.stack.id); if (have && (d.stack.r || 0) <= (have.r || 0)) continue; } const dd = Math.hypot(d.x - b.x, d.z - b.z); if (dd < bdd && Math.abs(d.y - b.y) < 12) { bdd = dd; bd = d; } }
+    br.goalsMade = (br.goalsMade || 0) + 1;
+    /* once geared up, go hunt: the goal is to be the last one standing */
+    const aliveN = 1 + G.bots.reduce((n, q) => n + (q.dead ? 0 : 1), 0), hpOk = b.hp + b.sh >= 70;
+    const huntP = aliveN <= 6 ? 0.9 : aliveN <= 12 ? 0.65 : 0.4;
+    if (!needGun && hpOk && botHasGun(b) && br.goalsMade >= 3 && Math.random() < huntP) {
+      const foes = enemiesOf(b).map(e => [Math.hypot(e.x - b.x, e.z - b.z), e]).sort((p, q) => p[0] - q[0]).slice(0, 3);
+      if (foes.length) { const t = foes[Math.floor(Math.random() * foes.length)][1]; br.goal = { type: 'hunt', t, ox: rnd(-10, 10), oz: rnd(-10, 10) }; br.goalT = 10 + Math.random() * 6; }
+    }
+    if (br.goal) { }
+    else if (bd) br.goal = { type: 'drop', d: bd };
     else {
       const c = findChestNear(b.x, b.y, b.z, (needGun ? 80 : 45) * D.loot); // chests known from map + sight (approximation: bots scout near)
       if (c && Math.hypot(c.x - b.x, c.z - b.z) < 90 && (Math.random() < 0.85)) br.goal = { type: 'chest', c };
@@ -3936,7 +4048,11 @@ function botLoot(b, br, D, dt) {
     }
   }
   const g = br.goal; if (!g) return;
-  if (g.type === 'drop') { followPath(b, g.d.x, g.d.z, 1, dt); }
+  if (g.type === 'drop') {
+    const gd = followPath(b, g.d.x, g.d.z, 1, dt);
+    if (gd < 2.2) { br.atDrop = (br.atDrop || 0) + dt; if (br.atDrop > 1.2) { if (!br.skip) br.skip = new Map(); if (br.skip.size > 30) br.skip.clear(); br.skip.set(g.d, G.t + 45); br.goal = null; br.goalT = 0; br.atDrop = 0; } } else br.atDrop = 0;
+  }
+  else if (g.type === 'hunt') { const t = g.t; if (!t || t.dead || (t.spectate)) { br.goal = null; br.goalT = 0; } else { const gd = followPath(b, t.x + g.ox, t.z + g.oz, 1, dt); b.sprint = true; if (gd < 4) { g.ox *= 0.4; g.oz *= 0.4; if (gd < 2) { br.goal = null; br.goalT = 0; } } } }
   else if (g.type === 'chest') { const gd = followPath(b, g.c.x + 0.5, g.c.z + 0.5, 1, dt); if (gd < 2.6 && Math.abs(g.c.y - b.y) < 6) { const c = g.c; openChest(b, c.x, c.y, c.z); br.goal = null; } }
   else if (g.type === 'poi') { const gd = followPath(b, g.x, g.z, 1, dt); if (gd < 5) { br.goal = null; br.goalT = 0; } }
   else if (g.type === 'gather') { botGather(b, br, D, dt); }
@@ -4602,7 +4718,7 @@ function setupBR(opts, UI) {
   const nBots = opts.bots != null ? opts.bots : ({ beginner: 11, normal: 15, advanced: 19, expert: 23 }[G.difficulty] || 15);
   // storm
   const R0 = Math.hypot(w.W, w.D) * 0.5 * 1.02, cx = w.W / 2, cz = w.D / 2;
-  const phases = [{ wait: 100, shrink: 60, f: 0.62, dmg: 1 }, { wait: 70, shrink: 50, f: 0.4, dmg: 2 }, { wait: 55, shrink: 40, f: 0.24, dmg: 4 }, { wait: 45, shrink: 35, f: 0.13, dmg: 7 }, { wait: 35, shrink: 30, f: 0.06, dmg: 10 }, { wait: 25, shrink: 25, f: 0.0, dmg: 14 }];
+  const phases = [{ wait: 100, shrink: 40, f: 0.62, dmg: 1 }, { wait: 70, shrink: 33, f: 0.4, dmg: 2 }, { wait: 55, shrink: 27, f: 0.24, dmg: 4 }, { wait: 45, shrink: 23, f: 0.13, dmg: 7 }, { wait: 35, shrink: 20, f: 0.06, dmg: 10 }, { wait: 25, shrink: 17, f: 0.0, dmg: 14 }];
   G.zone = { cx, cz, r: R0, R0, tcx: cx, tcz: cz, tr: R0, fromR: R0, fromX: cx, fromZ: cz, phase: -1, state: 'drop', t: 55, shrinking: false, phases, dmg: 0 };
   nextZonePhase(true);
   const R = G.rend;
@@ -5021,7 +5137,7 @@ const UI = {
     row('View distance', slider('viewDist', 3, 10, 1, v => v + ' chunks')); row('Render scale', slider('renderScale', 0.5, 1.25, 0.05, v => Math.round(v * 100) + '%', () => G.rend && G.rend.size(window.innerWidth, window.innerHeight)));
     row('Lobby music on/off', toggle('sound', () => Snd.setVolume())); row('UI sounds (clicks) on/off', toggle('uiSound')); row('Sound volume', slider('volume', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume())); row('Music volume', slider('music', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume()));
     const dsel = el('div', 'chips'); for (const d of ['beginner', 'normal', 'advanced', 'expert']) { const c = el('button', 'chip' + (Settings.difficulty === d ? ' sel' : ''), d[0].toUpperCase() + d.slice(1)); c.addEventListener('click', () => { Settings.difficulty = d; saveSettings(); this.renderSettings(); }); dsel.appendChild(c); } row('AI difficulty (next match)', dsel);
-    row('Damage numbers', toggle('dmgNumbers')); row('Screen shake', toggle('shake')); row('View bob (first person)', toggle('bob')); row('Invert Y axis', toggle('invertY')); row('Crosshair', toggle('crosshair')); row('Show FPS', toggle('showFps')); row('Gameplay hints', toggle('hints'));
+    row('Sun shadows (turn off if slow)', toggle('sunShadows')); row('Damage numbers', toggle('dmgNumbers')); row('Screen shake', toggle('shake')); row('View bob (first person)', toggle('bob')); row('Invert Y axis', toggle('invertY')); row('Crosshair', toggle('crosshair')); row('Show FPS', toggle('showFps')); row('Gameplay hints', toggle('hints'));
     const rb = el('button', 'btn small', 'Reset hints'); rb.addEventListener('click', () => { Store.del('hints'); G.hintsShown = {}; HUD.toast('Hints reset'); }); row('Tutorial hints', rb);
   },
   renderControls() { for (const id of ['controls-list', 'controls-list2']) { const h = $(id); if (h) this.renderControlsInto(h); } },
