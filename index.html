@@ -1275,7 +1275,22 @@ const MAP_TYPES = [
   { id: 'deepwoods', name: 'Deep Woods', bag: (n, rng) => mapBag(n, rng, { [BIO.FOREST]: 8, [BIO.SWAMP]: 4, [BIO.PLAINS]: 2, [BIO.CITY]: 1, [BIO.SNOW]: 1 }, [BIO.FOREST]) },
   { id: 'metropolis', name: 'Metropolis', bag: (n, rng) => mapBag(n, rng, { [BIO.CITY]: 4, [BIO.PLAINS]: 5, [BIO.FOREST]: 3, [BIO.DESERT]: 1, [BIO.VOLCANO]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
   { id: 'archipelago', name: 'Archipelago', bag: (n, rng) => mapBag(n, rng, { [BIO.OCEAN]: 5, [BIO.PLAINS]: 3, [BIO.FOREST]: 3, [BIO.SNOW]: 1, [BIO.DESERT]: 1, [BIO.VOLCANO]: 1, [BIO.CITY]: 1, [BIO.SWAMP]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
-  { id: 'wildlands', name: 'Wildlands', bag: (n, rng) => mapBag(n, rng, { [BIO.SWAMP]: 4, [BIO.VOLCANO]: 2, [BIO.SNOW]: 3, [BIO.DESERT]: 3, [BIO.FOREST]: 3, [BIO.CITY]: 1 }, [BIO.PLAINS]) }
+  { id: 'wildlands', name: 'Wildlands', bag: (n, rng) => mapBag(n, rng, { [BIO.SWAMP]: 4, [BIO.VOLCANO]: 2, [BIO.SNOW]: 3, [BIO.DESERT]: 3, [BIO.FOREST]: 3, [BIO.CITY]: 1 }, [BIO.PLAINS]) },
+  /* ---- extra maps. Optional knobs: shape (island outline), lift (raise/lower land), hs (height scale), lake (lower = more lakes), river (0 = none, 2 = wide) ---- */
+  { id: 'ringfire', name: 'Ring of Fire', shape: 'blob', bag: (n, rng) => mapBag(n, rng, { [BIO.VOLCANO]: 4, [BIO.DESERT]: 3, [BIO.PLAINS]: 3, [BIO.FOREST]: 2, [BIO.CITY]: 2, [BIO.OCEAN]: 2 }, [BIO.PLAINS, BIO.DESERT]) },
+  { id: 'atoll', name: 'Atoll Ring', shape: 'ring', lake: 0.5, bag: (n, rng) => mapBag(n, rng, { [BIO.PLAINS]: 4, [BIO.FOREST]: 4, [BIO.DESERT]: 2, [BIO.SWAMP]: 2, [BIO.CITY]: 2, [BIO.VOLCANO]: 1, [BIO.SNOW]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'twinisles', name: 'Twin Isles', shape: 'twin', bag: null },
+  { id: 'crescent', name: 'Crescent Bay', shape: 'crescent', bag: null },
+  { id: 'serpent', name: 'Serpent Isle', shape: 'serpent', river: 0, bag: (n, rng) => mapBag(n, rng, { [BIO.FOREST]: 4, [BIO.PLAINS]: 4, [BIO.SWAMP]: 3, [BIO.SNOW]: 2, [BIO.DESERT]: 2, [BIO.CITY]: 2, [BIO.VOLCANO]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'islets', name: 'Scattered Islets', shape: 'islets', river: 0.5, bag: (n, rng) => mapBag(n, rng, { [BIO.PLAINS]: 4, [BIO.FOREST]: 4, [BIO.DESERT]: 2, [BIO.SNOW]: 2, [BIO.SWAMP]: 2, [BIO.CITY]: 1, [BIO.VOLCANO]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'jungleisles', name: 'Jungle Isles', shape: 'islets', river: 0.5, lift: 0.8, bag: (n, rng) => mapBag(n, rng, { [BIO.FOREST]: 9, [BIO.SWAMP]: 3, [BIO.PLAINS]: 3, [BIO.VOLCANO]: 1 }, [BIO.FOREST]) },
+  { id: 'highlands', name: 'Highlands', hs: 1.3, lift: 1, bag: (n, rng) => mapBag(n, rng, { [BIO.SNOW]: 6, [BIO.FOREST]: 5, [BIO.PLAINS]: 3, [BIO.VOLCANO]: 1, [BIO.CITY]: 1 }, [BIO.FOREST, BIO.SNOW]) },
+  { id: 'floodlands', name: 'Floodlands', lift: -1.2, lake: 0.16, river: 2.2, bag: (n, rng) => mapBag(n, rng, { [BIO.PLAINS]: 5, [BIO.SWAMP]: 5, [BIO.FOREST]: 4, [BIO.CITY]: 1, [BIO.DESERT]: 1 }, [BIO.PLAINS, BIO.SWAMP]) },
+  { id: 'dunesea', name: 'Endless Dunes', lake: 0.5, river: 0, bag: (n, rng) => mapBag(n, rng, { [BIO.DESERT]: 11, [BIO.CITY]: 2, [BIO.VOLCANO]: 1, [BIO.PLAINS]: 2 }, [BIO.DESERT]) },
+  { id: 'murkmoor', name: 'Murkmoor', lake: 0.2, bag: (n, rng) => mapBag(n, rng, { [BIO.SWAMP]: 9, [BIO.FOREST]: 4, [BIO.VOLCANO]: 1, [BIO.PLAINS]: 1, [BIO.CITY]: 1 }, [BIO.SWAMP]) },
+  { id: 'frostbite', name: 'Frostbite Isles', shape: 'islets', hs: 0.8, bag: (n, rng) => mapBag(n, rng, { [BIO.SNOW]: 8, [BIO.FOREST]: 3, [BIO.PLAINS]: 2, [BIO.VOLCANO]: 1, [BIO.CITY]: 1, [BIO.OCEAN]: 1 }, [BIO.SNOW]) },
+  { id: 'laststand', name: 'Last Stand', shape: 'blob', bag: (n, rng) => mapBag(n, rng, { [BIO.CITY]: 5, [BIO.PLAINS]: 4, [BIO.FOREST]: 3, [BIO.DESERT]: 1, [BIO.SNOW]: 1, [BIO.SWAMP]: 1, [BIO.VOLCANO]: 1 }, [BIO.PLAINS, BIO.FOREST]) },
+  { id: 'badlands', name: 'Badlands', shape: 'crescent', hs: 1.15, bag: (n, rng) => mapBag(n, rng, { [BIO.DESERT]: 6, [BIO.VOLCANO]: 3, [BIO.PLAINS]: 2, [BIO.CITY]: 2, [BIO.SWAMP]: 1 }, [BIO.DESERT]) }
 ];
 const MAP_BY_ID = {}; MAP_TYPES.forEach(m => { MAP_BY_ID[m.id] = m; });
 // the same seed always gives the same map, so multiplayer rooms and saved worlds stay in sync
@@ -1285,7 +1300,7 @@ class World {
   constructor(o) {
     this.seed = (o.seed == null ? Math.floor(Math.random() * 1e9) : o.seed) | 0;
     this.type = o.type || 'island';
-    this.map = MAP_BY_ID[o.map] ? o.map : 'classic';
+    this.map = MAP_BY_ID[o.map] ? o.map : 'classic'; this.mp = MAP_BY_ID[this.map];
     this.cw = o.cw || 16; this.cd = o.cd || o.cw || 16;
     this.W = this.cw * CS; this.D = this.cd * CS;
     this.N = o.N || clamp(Math.round(this.W / 42), 4, 9);
@@ -1405,9 +1420,29 @@ class World {
   }
   exportEdits() { const o = []; for (const [k, v] of this.edits) { o.push(k, v); } return o; }
 
+  /* ---- island outline: returns a distance-like value, <=2 is open sea, >=24 is solid land ---- */
+  shapeEdge(x, z) {
+    const W = this.W, D = this.D, sh = this.mp.shape;
+    let e = Math.min(x, z, W - 1 - x, D - 1 - z);
+    if (!sh || this.noRing) return e;
+    const n = this.noise3, cx = W / 2, cz = D / 2, R = Math.min(W, D) / 2;
+    const warp = n.n2(x / 38 + 5, z / 38 + 9) * 9 + n.n2(x / 15, z / 15 + 3) * 3;
+    const d = Math.hypot(x - cx, z - cz);
+    let q;
+    switch (sh) {
+      case 'blob': q = (R * 0.9 - d + warp) * 1.5; break;
+      case 'ring': q = (R * 0.34 - Math.abs(d - R * 0.62) + warp * 0.6) * 1.5; break;
+      case 'twin': q = (W * 0.31 - Math.min(Math.hypot(x - W * 0.27, z - D * 0.29), Math.hypot(x - W * 0.73, z - D * 0.71)) + warp) * 1.5; break;
+      case 'crescent': q = (Math.min(R * 0.96 - d, Math.hypot(x - (cx + R * 0.5), z - cz) - R * 0.42) + warp) * 1.5; break;
+      case 'serpent': q = (D * 0.27 - Math.abs(z - (cz + Math.sin(x / W * 6.8 + 0.6) * D * 0.19)) + warp * 0.7) * 1.5; break;
+      case 'islets': q = (n.fbm2(x / 46 + 30, z / 46 + 30, 3) + 0.15) * 110; break;
+      default: q = e;
+    }
+    return Math.min(e, q);
+  }
   /* ---- biome sites (jittered voronoi) ---- */
   genSites(rng) {
-    const N = this.N, cell = this.W / N, sites = [];
+    const N = this.N, W = this.W, cell = this.W / N, sites = [];
     const inner = [];
     for (let gz = 0; gz < N; gz++) for (let gx = 0; gx < N; gx++) {
       const jx = (rng() - 0.5) * 0.55, jz = (rng() - 0.5) * 0.55;
@@ -1430,6 +1465,19 @@ class World {
     // shuffle
     for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = bag[i]; bag[i] = bag[j]; bag[j] = t; }
     inner.forEach((s, i) => { s.b = bag[i % bag.length]; });
+    // shaped maps: keep cities / volcanoes on solid land (nudge them inland), and turn drowned sites into sea
+    if (this.mp.shape && !this.noRing) {
+      for (const s of sites) {
+        if (s.b === BIO.OCEAN) continue;
+        const big = s.b === BIO.CITY || s.b === BIO.VOLCANO, need = big ? 27 : 8, here = this.shapeEdge(s.x, s.z);
+        if (here >= need) continue;
+        let best = null, bv = need;
+        if (big) for (let k = 0; k < 60; k++) { const a = rng() * Math.PI * 2, r = 4 + rng() * 44, px = s.x + Math.cos(a) * r, pz = s.z + Math.sin(a) * r; if (px < 30 || pz < 30 || px > W - 30 || pz > this.D - 30) continue; const v = this.shapeEdge(px, pz); if (v > bv) { bv = v; best = [px, pz]; } }
+        if (best) { s.x = best[0]; s.z = best[1]; }
+        else if (here < 8) s.b = BIO.OCEAN;
+        else if (big) s.b = BIO.PLAINS;
+      }
+    }
     // make sure the centre cell is friendly (plains/forest) so there's a safe middle
     this.sites = sites;
     this.volcanoes = sites.filter(s => s.b === BIO.VOLCANO);
@@ -1466,6 +1514,12 @@ class World {
     };
     let h = hOf(s1) * w1 + (s2 ? hOf(s2) * w2 : 0) + (s3 ? hOf(s3) * w3 : 0);
     let bio = s1.b;
+    { const mp = this.mp;
+      if (mp.hs || mp.lift) {
+        const ow = (s1.b === BIO.OCEAN ? w1 : 0) + (s2 && s2.b === BIO.OCEAN ? w2 : 0) + (s3 && s3.b === BIO.OCEAN ? w3 : 0);
+        if (mp.hs && h > SEA) h = SEA + (h - SEA) * mp.hs;
+        if (mp.lift) h += mp.lift * (1 - ow);
+      } }
     if (d2 - d1 < 7 && hash2(x, z, this.seed) < 0.45 * (1 - (d2 - d1) / 7)) bio = s2.b;
     // volcano cone (independent from voronoi cell)
     for (const v of this.volcanoes) {
@@ -1491,16 +1545,16 @@ class World {
     // rivers + lakes (land only)
     const land = h > SEA + 1.5 && bio !== BIO.VOLCANO && bio !== BIO.CITY && bio !== BIO.OCEAN;
     if (land && !(bio === BIO.SNOW && h > SEA + 22)) {
-      const rv = Math.abs(n.n2(x / 105 + 10, z / 105 + 4)), thr = 0.024 + 0.012 * n2.n2(x / 21, z / 21);
+      const rv = Math.abs(n.n2(x / 105 + 10, z / 105 + 4)), thr = (0.024 + 0.012 * n2.n2(x / 21, z / 21)) * (this.mp.river == null ? 1 : this.mp.river);
       if (rv < thr * 2.2) {
         const depth = rv < thr ? SEA - 0.8 - 2.6 * (1 - rv / thr) : SEA + 0.8 + (rv - thr) / thr * 3.8;
         h = Math.min(h, depth < h ? depth : h);
       }
-      const lk = n2.fbm2(x / 38 + 200, z / 38 + 200, 2);
-      if (lk > 0.34) h = lerp(h, SEA - 3, smooth(0.34, 0.46, lk));
+      const lk = n2.fbm2(x / 38 + 200, z / 38 + 200, 2), lk0 = this.mp.lake == null ? 0.34 : this.mp.lake;
+      if (lk > lk0) h = lerp(h, SEA - 3, smooth(lk0, lk0 + 0.12, lk));
     }
     { // island mask: ocean around the edge
-      const e = Math.min(x, z, W - 1 - x, this.D - 1 - z), t = this.noRing ? 1 : smooth(2, 24, e);
+      const e = this.shapeEdge(x, z), t = this.noRing ? 1 : smooth(2, 24, e);
       if (t < 1) { h = lerp(SEA - 8 + nb * 3, h, t); if (t < 0.5) bio = BIO.OCEAN; }
     }
     h = clamp(Math.floor(h), 3, WH - 30);
@@ -4482,6 +4536,12 @@ function findSpawn(world, around, rad) {
     const y = world.surfaceY(x, z); if (!B_SOLID[world.getBlock(x, y - 1, z)] || world.getBlock(x, y, z) !== 0 || world.getBlock(x, y + 1, z) !== 0) continue;
     return [x + 0.5, y, z + 0.5];
   }
+  for (let t = 0; t < 3000; t++) { // second pass: any dry, open spot at all
+    const x = 8 + Math.floor(Math.random() * (world.W - 16)), z = 8 + Math.floor(Math.random() * (world.D - 16));
+    if (world.colB[x + z * world.W] === BIO.OCEAN || world.colH[x + z * world.W] < SEA + 1) continue;
+    const y = world.surfaceY(x, z); if (!B_SOLID[world.getBlock(x, y - 1, z)] || world.getBlock(x, y, z) !== 0 || world.getBlock(x, y + 1, z) !== 0) continue;
+    return [x + 0.5, y, z + 0.5];
+  }
   return [world.W / 2, world.surfaceY(world.W >> 1, world.D >> 1), world.D / 2];
 }
 function landPoint(world, minD) {
@@ -4522,8 +4582,8 @@ async function startSession(mode, opts) {
   for (let i = 0; i < 40 && need > 0; i++) { need = R.updateChunks(P.x, P.z, 40); UI.loading(true, 'Building terrain…', 0.72 + 0.28 * (1 - Math.min(1, need / 120))); await new Promise(r => setTimeout(r, 0)); }
   G.started = true; G.t = 0; HUD.equip(); UI.loading(false);
   UI.showHud(true); UI.requestLock();
-  if (mode === 'br') HUD.banner('BATTLE ROYALE', 'Steer with WASD. Space toggles a dive / parachute.', '#ffb52e');
-  else if (mode === 'survival') HUD.banner(sv ? 'WELCOME BACK' : 'SURVIVAL', sv ? 'Your world is loaded.' : 'Gather wood, craft tools, build a shelter before night.', '#7ad06a');
+  if (mode === 'br') HUD.banner('BATTLE ROYALE', 'Steer with WASD. Space toggles a dive / parachute. · Map: ' + MAP_BY_ID[world.map].name, '#ffb52e');
+  else if (mode === 'survival') HUD.banner(sv ? 'WELCOME BACK' : 'SURVIVAL', (sv ? 'Your world is loaded.' : 'Gather wood, craft tools, build a shelter before night.') + ' · Map: ' + MAP_BY_ID[world.map].name, '#7ad06a');
   else HUD.banner('CREATIVE', 'Double-tap Space to fly. Tab opens the item palette.', '#6ab0ff');
   if (mode !== 'br') { invAdd(P.inv, null); }
   Snd.init(); Snd.startMusic();
@@ -5230,7 +5290,7 @@ const Menu = {
     const R = G.rend; if (!R) return;
     R.waterK = 0; R.stormK = 0; R.weather = 0; if (R.rainM) R.rainM.visible = false;
     try {
-      if (!this.world) { this.building = true; const w = new World({ seed: 20240611, cw: 8, cd: 8, type: 'island' }); await runGenerator(w, null); this.world = w; this.building = false; }
+      if (!this.world) { this.building = true; const sd = Math.floor(Math.random() * 1e9), w = new World({ seed: sd, cw: 8, cd: 8, type: 'island', map: pickMapId(sd) }); await runGenerator(w, null); this.world = w; this.building = false; }
       if (!this.active || G.started || G.mode !== 'menu') return;
       G.world = this.world; R.setWorld(this.world); R.tod = 0.36; this.t = rnd(0, 100);
     } catch (e) { this.building = false; console.warn('menu backdrop failed', e); this.world = null; }
