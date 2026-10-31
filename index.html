@@ -766,8 +766,8 @@ gun('shotgun_t', 'Tactical Shotgun', { dmg: 9.5, pellets: 8, rof: 1.25, mag: 5, 
 gun('shotgun_h', 'Heavy Shotgun', { dmg: 11.5, pellets: 10, rof: 0.85, mag: 2, reload: 3.0, range: 20, spread: 5.8, recoil: 3.2, ammo: 'shells', snd: 'shotgun', auto: false, sdmg: 1.6, falloff: [6, 24, 0.28], head: 1.25, minR: 1, zoom: 0.9, desc: 'Two barrels, enormous burst damage.' });
 gun('hunting', 'Hunting Rifle', { dmg: 68, rof: 1.1, mag: 5, reload: 2.8, range: 170, spread: 0.2, recoil: 2.2, ammo: 'ammo_h', snd: 'rifle', auto: false, sdmg: 0.6, head: 2.0, minR: 1, zoom: 0.5, desc: 'Semi-auto precision rifle.' });
 gun('sniper', 'Precision Sniper', { dmg: 92, rof: 0.55, mag: 1, reload: 3.4, range: 260, spread: 0.03, recoil: 4.0, ammo: 'ammo_h', snd: 'sniper', auto: false, sdmg: 0.5, head: 2.0, minR: 2, zoom: 0.22, scope: true, tracer: '#bfe9ff', desc: 'One shot, one very bad day.' });
-gun('bow', 'Bow', { type: 'bow', dmg: 40, rof: 1.2, mag: 0, reload: 0, range: 90, spread: 0.4, recoil: 0.6, ammo: 'arrow', snd: 'bow', auto: false, speed: 58, grav: 9, sdmg: 0.3, head: 1.8, charge: 0.7, zoom: 0.7, tracer: '#d9c7a0', desc: 'Hold to draw. Arrows drop over distance.' });
-gun('crossbow', 'Crossbow', { type: 'bow', dmg: 66, rof: 0.75, mag: 1, reload: 1.7, range: 120, spread: 0.2, recoil: 1.2, ammo: 'bolt', snd: 'crossbow', auto: false, speed: 96, grav: 4, sdmg: 0.4, head: 1.8, minR: 1, zoom: 0.55, tracer: '#9fb4c8', desc: 'Powerful bolts with a fast flight.' });
+gun('bow', 'Bow', { launcher: true, dmg: 40, rof: 1.2, mag: 0, reload: 0, range: 90, spread: 0.4, recoil: 0.6, ammo: 'arrow', snd: 'bow', auto: false, speed: 58, grav: 9, sdmg: 0.3, head: 1.8, charge: 0.7, zoom: 0.7, tracer: '#d9c7a0', desc: 'Hold to draw. Arrows drop over distance.' });
+gun('crossbow', 'Crossbow', { launcher: true, dmg: 66, rof: 0.75, mag: 1, reload: 1.7, range: 120, spread: 0.2, recoil: 1.2, ammo: 'bolt', snd: 'crossbow', auto: false, speed: 96, grav: 4, sdmg: 0.4, head: 1.8, minR: 1, zoom: 0.55, tracer: '#9fb4c8', desc: 'Powerful bolts with a fast flight.' });
 const GUN_IDS = ['smg', 'ar', 'burst', 'shotgun_t', 'shotgun_h', 'hunting', 'sniper', 'bow', 'crossbow'];
 const WEAPON_TYPES = new Set(['gun', 'melee', 'tool']);
 const WEAPON_NAMES = { frost: 'Frostbite', ember: 'Emberfire', aether: 'Aether' };
@@ -3512,7 +3512,7 @@ function weaponUpdate(e, dt, inp) {
   if (ws.reload > 0) { ws.reload -= dt; if (ws.reloadId !== s) { ws.reload = 0; } else if (ws.reload <= 0) { const st = gunStats(s), need = st.magMax - s.mag, have = e.infAmmo ? need : ammoInInv(e, st.ammo), take = Math.min(need, have); s.mag += take; if (!e.infAmmo) invTake(e.inv, st.ammo, take); G.invDirty = true; } }
   if (it.type === 'gun') {
     const st = gunStats(s);
-    if (st.type === 'bow') { // charge weapon
+    if (st.launcher) { // charge weapon
       const crossbow = s.id === 'crossbow';
       if (crossbow) {
         if (inp.fire && ws.cool <= 0 && ws.reload <= 0 && ws.equipT <= 0) { if (s.mag > 0) { fireProjectileWeapon(e, s, st, 1); s.mag--; ws.cool = 1 / st.rof; } else if (!startReload(e)) { if (inp.fireEdge) Snd.play('empty', { x: e.x, y: e.y, z: e.z }); } }
@@ -3682,7 +3682,7 @@ function useGadget(e, s) {
   if (s.id === 'jumppad') { spawnProj({ kind: 'jumppad', x: eye[0] + dir[0] * 0.5, y: eye[1] + dir[1] * 0.5, z: eye[2] + dir[2] * 0.5, vx: dir[0] * 16, vy: dir[1] * 16 + 2, vz: dir[2] * 16, dmg: 0, grav: 22, owner: e, life: 4, fuse: 99 }); return true; }
   if (s.id === 'barrier') {
     const f = DIRS[yawDir(e.yaw)], rx = -f[1], rz = f[0], bx = Math.floor(e.x + f[0] * 2.5), bz = Math.floor(e.z + f[1] * 2.5), by = Math.floor(e.y);
-    let n = 0; for (let i = -2; i <= 2; i++) for (let h = 0; h < 4; h++) if (placeBlock(e, bx + rx * i, by + h, bz + rz * i, BK.alloy, { dyn: 25, noEdit: true, quiet: n++ > 0 })) { }
+    let n = 0; for (let i = -2; i <= 2; i++) for (let h = 0; h < 4; h++) if (placeBlock(e, bx + rx * i, by + h, bz + rz * i, BK.alloy, { dyn: 25, noEdit: true, quiet: n > 0 })) n++;
     return n > 0;
   }
   return false;
@@ -4165,7 +4165,9 @@ function botFight(b, br, D, enemy, vis, dEn, dt) {
   const err = Math.hypot(ey, ep) / DEG;
   const inRange = st ? dEn < st.range * 0.9 : dEn < 3.2;
   if (vis && br.react <= 0 && err < (st && st.pellets > 1 ? 7 : 4.5) && inRange && s) {
-    if (s && ITEM[s.id].type === 'gun') { inp.fire = true; inp.fireEdge = (G.t * 7 | 0) !== (br.lastEdge | 0) || !st.auto; br.lastEdge = G.t * 7; if (!st.auto) inp.fireEdge = Math.random() < dt * (st.rof + 1.2) * 1.4; inp.aim = dEn > 22; }
+    if (s && ITEM[s.id].type === 'gun') { inp.fire = true; inp.fireEdge = (G.t * 7 | 0) !== (br.lastEdge | 0) || !st.auto; br.lastEdge = G.t * 7; if (!st.auto) inp.fireEdge = Math.random() < dt * (st.rof + 1.2) * 1.4; inp.aim = dEn > 22;
+      /* bows fire on release: hold the draw, then let go once it is nearly full */
+      if (st.launcher && s.id === 'bow') { const ws = weaponState(b); inp.fire = !(ws.charging && ws.charge >= 0.9); inp.fireEdge = false; } }
     else inp.attack = true;
   }
   if (st && s.mag <= 0) { inp.reload = true; if (br.coverT <= 0 && Math.random() < D.cover * 0.6 && vis) { br.coverT = 3; br.coverPos = botFindCover(b, ls); } }
@@ -4343,6 +4345,7 @@ function startKit(P, mode) {
     give('pickaxe', 1, 3); give('sword', 1, 3); give('ar', 1, 2); give('sniper', 1, 3); give('shotgun_t', 1, 2); give('grenade', 6); give('b_wood' in ITEM ? 'wood_block' : 'wood_block', 99); give('stone_block', 99);
     P.inv[7] = mkStack('brush_add', 1); P.inv[8] = mkStack('copier', 1);
     for (const m of ['wood', 'stone', 'iron', 'alloy']) P.inv[9 + ['wood', 'stone', 'iron', 'alloy'].indexOf(m)] = mkStack(m, 999);
+    invAdd(P.inv, mkStack('stone_block', 99)); /* slot 7 used to be overwritten by the brush */
   }
   P.sel = 0;
 }
@@ -4483,9 +4486,9 @@ function playerUpdate(P, dt) {
     if (G.ghostOn) { G.rend.setGhost([], true); G.ghostOn = false; }
     const hasWpn = held && (hit.type === 'gun' || hit.type === 'melee' || hit.type === 'tool');
     const inp = { fire: lmb, fireEdge: lmbE, aim: G.aimHeld, reload: I.pressed.KeyR, attack: lmb };
-    if (hit && hit.type === 'gun') { weaponUpdate(P, dt, inp); }
+    /* weaponUpdate ticks cooldown timers, so it must run exactly once per frame (it used to run twice for melee/tools, doubling their swing rate) */
+    if (hit && (hit.type === 'gun' || ((hit.type === 'melee' || hit.type === 'tool') && lmb))) { weaponUpdate(P, dt, inp); }
     else { weaponUpdate(P, dt, { fire: false, fireEdge: false, aim: false, reload: false, attack: false }); }
-    if (hit && (hit.type === 'melee' || hit.type === 'tool') && lmb) { weaponUpdate(P, dt, inp); }
     // LMB behaviours
     if (lmb) {
       /* using throwables, heals and gadgets must never fall through to mining (holding LMB while healing used to dig blocks) */
@@ -4829,7 +4832,7 @@ function updateZone(dt) {
   if (Z.state === 'wait') { Z.dmgNow = Z.phase === 0 ? 0 : Z.phases[Math.max(0, Z.phase - 1)].dmg; if (Z.t <= 0) { Z.state = 'shrink'; Z.t = Z.phases[Z.phase].shrink; Z.shrinking = true; Snd.play('warn'); HUD.banner('STORM CLOSING', 'Get to the safe zone!', '#ff5a5a'); } }
   else if (Z.state === 'shrink') { const k = 1 - Z.t / Z.phases[Z.phase].shrink; const e = k * k * (3 - 2 * k) * 0.35 + k * 0.65; Z.r = lerp(Z.fromR, Z.tr, e); Z.cx = lerp(Z.fromX, Z.tcx, e); Z.cz = lerp(Z.fromZ, Z.tcz, e); if (Z.t <= 0) { Z.r = Z.tr; Z.cx = Z.tcx; Z.cz = Z.tcz; nextZonePhase(); } }
   const dmg = Z.state === 'wait' && Z.phase === 0 ? 0 : Z.phases[Math.min(Z.phase, Z.phases.length - 1)].dmg * (Z.state === 'wait' ? 1 : 1);
-  Z.dmgNow = G.t < 50 ? 0 : (Z.state === 'wait' && Z.phase === 0 ? 0 : Z.phases[Math.max(0, Z.state === 'wait' ? Z.phase - 1 : Z.phase)].dmg);
+  Z.dmgNow = G.t < 50 ? 0 : (Z.state === 'wait' && Z.phase === 0 ? 0 : Z.phases[clamp(Z.state === 'wait' ? Z.phase - 1 : Z.phase, 0, Z.phases.length - 1)].dmg); /* 'final' state has phase === phases.length, which used to index past the array and throw every frame */
   const all = [G.P, ...G.bots];
   for (const e of all) { if (!e || e.dead || e.spectate) continue; if (e.para || e.dive) continue; const d = Math.hypot(e.x - Z.cx, e.z - Z.cz); if (d > Z.r && Z.dmgNow > 0) { e.stormT = (e.stormT || 0) + dt; damageEnt(e, Z.dmgNow * dt * (1 + Math.min(1, (d - Z.r) / 80) * 0.5), null, { type: 'storm', quiet: true }); if (e === G.P) { e.stormSnd = (e.stormSnd || 0) - dt; if (e.stormSnd <= 0) { e.stormSnd = 1.0; Snd.play('hurt', { vol: 0.35 }); } } } }
   // visuals
