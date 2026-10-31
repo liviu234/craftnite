@@ -4422,6 +4422,13 @@ function playerUpdate(P, dt) {
   if (P.flying) { P.gravMul = 0; P.noFall = true; } else { P.gravMul = 1; P.noFall = P.creative; }
   // ---- hotbar / modes ----
   for (let i = 1; i <= 9; i++) if (I.pressed['Digit' + i]) { if (P.buildMode && i <= 4) { P.piece = i - 1; Snd.play('click'); HUD.equip(); } else if (!P.buildMode) { P.sel = i - 1; P.using = null; Snd.play('click'); } }
+  if (P.buildMode && !G.ui2) { // keyboard material select: 5-8 direct, F next, Z previous
+    let nm = P.mat;
+    for (let i = 0; i < 4; i++) if (I.pressed['Digit' + (i + 5)]) nm = i;
+    if (I.pressed.KeyF) nm = (P.mat + 1) % 4;
+    if (I.pressed.KeyZ) nm = (P.mat + 3) % 4;
+    if (nm !== P.mat) { P.mat = nm; Snd.play('click'); HUD.equip(); HUD.toast(BUILD_MATS[nm].label); }
+  }
   if (I.wheel && !G.ui2) {
     const dir = I.wheel > 0 ? 1 : -1;
     if (P.buildMode) { P.mat = (P.mat + dir + 4) % 4; Snd.play('click'); HUD.equip(); }
@@ -4429,7 +4436,7 @@ function playerUpdate(P, dt) {
     else { P.sel = (P.sel + dir + 9) % 9; P.using = null; Snd.play('click'); }
     I.wheel = 0;
   }
-  if (I.pressed.KeyQ && !P.creative && G.modeName !== 'creative-x') { P.buildMode = !P.buildMode; P.using = null; HUD.equip(); Snd.play('click'); HUD.hint('build', 'Build mode: 1-4 choose Wall/Floor/Ramp/Roof, wheel changes material, LMB builds, RMB edits, R repairs.'); }
+  if (I.pressed.KeyQ && !P.creative && G.modeName !== 'creative-x') { P.buildMode = !P.buildMode; P.using = null; HUD.equip(); Snd.play('click'); HUD.hint('build', 'Build mode: 1-4 choose Wall/Floor/Ramp/Roof, F/Z or 5-8 change material, B builds, G edits, R repairs.'); }
   if (I.pressed.KeyQ && P.creative) { P.buildMode = !P.buildMode; HUD.equip(); Snd.play('click'); }
   if (I.pressed.KeyV) { setCamView(G.camMode === 'first' ? 'third' : 'first'); }
   if (I.pressed.KeyX) { const s = P.inv[P.sel]; if (s && !(s.id === 'pickaxe' && s.r === 0 && invCount(P.inv, 'pickaxe') === 1)) { spawnDrop(Object.assign({}, s), P.x - Math.sin(P.yaw) * 0.8, P.y + 1.2, P.z - Math.cos(P.yaw) * 0.8, -Math.sin(P.yaw) * 4, 3, -Math.cos(P.yaw) * 4, 1.2); P.inv[P.sel] = null; G.invDirty = true; Snd.play('click'); } }
@@ -4457,7 +4464,7 @@ function playerUpdate(P, dt) {
   if (P.buildMode) {
     const mat = BUILD_MATS[P.mat], pc = planPiece(P, PIECE_TYPES[P.piece]), v = pieceValid(P, pc);
     G.rend.setGhost(v.blocks, v.ok && (P.creative || invCount(P.inv, mat.item) >= mat.cost)); G.ghostOn = true;
-    if (lmb && P.buildCd <= 0) { if (placePiece(P, PIECE_TYPES[P.piece], P.mat)) P.buildCd = P.creative ? 0.08 : mat.time; else P.buildCd = 0.12; }
+    if ((lmb || K.KeyB) && P.buildCd <= 0) { if (placePiece(P, PIECE_TYPES[P.piece], P.mat)) P.buildCd = P.creative ? 0.08 : mat.time; else P.buildCd = 0.12; }
     if (rmbE && tgt) editPiece(P, tgt);
     if (I.pressed.KeyR && tgt) repairPiece(P, tgt);
     if (I.pressed.KeyG && tgt) editPiece(P, tgt);
@@ -5189,7 +5196,7 @@ const UI = {
   renderControls() { for (const id of ['controls-list', 'controls-list2']) { const h = $(id); if (h) this.renderControlsInto(h); } },
   renderControlsInto(host) {
     if (host.dataset.done) return; host.dataset.done = 1;
-    const rows = [['Move', 'W A S D'], ['Look', 'Mouse (or arrow keys)'], ['Jump / swim up / climb', 'Space'], ['Sprint', 'Shift'], ['Crouch / swim down / climb down', 'Ctrl or C'], ['Fire / mine / swing / use item', 'Left mouse'], ['Aim down sights / place block', 'Right mouse'], ['Reload  ·  repair piece (build mode)', 'R'], ['Interact · open chest · pick up weapon', 'E'], ['Inventory and crafting', 'Tab or I'], ['Select hotbar slot', '1 – 9 or mouse wheel'], ['Toggle build mode', 'Q'], ['Build mode: choose piece', '1 Wall · 2 Floor · 3 Ramp · 4 Roof'], ['Build mode: material', 'Mouse wheel'], ['Build mode: place / edit piece / repair', 'Left / Right mouse or G / R'], ['Drop selected item', 'X'], ['Camera: first / third person', 'V'], ['Map', 'M'], ['Pause menu', 'Esc'], ['Parachute: dive / open', 'Space'], ['Creative: fly (double-tap)', 'Space'], ['Creative: brush size', 'Shift + wheel'], ['Craft an item', 'Tab, then click a recipe (Shift-click ×5)'], ['Use a crafting table / furnace / forge', 'Stand next to it, press E'], ['Place a block or station', 'Select it in the hotbar, Right mouse'], ['Multiplayer: join a room', 'Main menu > Multiplayer, same code = same island'], ['Multiplayer: respawn', 'Automatic, 4 seconds after elimination']];
+    const rows = [['Move', 'W A S D'], ['Look', 'Mouse (or arrow keys)'], ['Jump / swim up / climb', 'Space'], ['Sprint', 'Shift'], ['Crouch / swim down / climb down', 'Ctrl or C'], ['Fire / mine / swing / use item', 'Left mouse'], ['Aim down sights / place block', 'Right mouse'], ['Reload  ·  repair piece (build mode)', 'R'], ['Interact · open chest · pick up weapon', 'E'], ['Inventory and crafting', 'Tab or I'], ['Select hotbar slot', '1 – 9 or mouse wheel'], ['Toggle build mode', 'Q'], ['Build mode: choose piece', '1 Wall · 2 Floor · 3 Ramp · 4 Roof'], ['Build mode: material', 'F next · Z previous · 5-8 direct · Mouse wheel'], ['Build mode: place / edit piece / repair', 'B or Left mouse / G or Right mouse / R'], ['Drop selected item', 'X'], ['Camera: first / third person', 'V'], ['Map', 'M'], ['Pause menu', 'Esc'], ['Parachute: dive / open', 'Space'], ['Creative: fly (double-tap)', 'Space'], ['Creative: brush size', 'Shift + wheel'], ['Craft an item', 'Tab, then click a recipe (Shift-click ×5)'], ['Use a crafting table / furnace / forge', 'Stand next to it, press E'], ['Place a block or station', 'Select it in the hotbar, Right mouse'], ['Multiplayer: join a room', 'Main menu > Multiplayer, same code = same island'], ['Multiplayer: respawn', 'Automatic, 4 seconds after elimination']];
     host.innerHTML = rows.map(r => '<div class="crow"><span>' + r[0] + '</span><kbd>' + r[1] + '</kbd></div>').join('') + '<div class="how"><h4>How a match works</h4><p>Drop from the battle bus, loot chests and the ground, harvest wood, stone and metal with your pickaxe, build walls and ramps to survive fights, and stay inside the shrinking storm circle. Last player standing wins.</p><h4>Survival</h4><p>Gather resources, craft a table, tools and weapons, build a shelter before night, and explore caves for rare minerals. Your world is saved automatically.</p><h4>Multiplayer</h4><p>Open Multiplayer from the main menu and enter a room code. Everyone with the same code shares the same island, chests, day cycle, and block edits. It is free-for-all: shoot other players for eliminations, and you respawn a few seconds after you are eliminated.</p></div>';
   },
   /* ---------------- character customization ---------------- */
@@ -5384,7 +5391,7 @@ const UI = {
     const ub = $('usebar'); if (P.using) { ub.classList.add('on'); $('usefill').style.width = (100 * (1 - P.using.t / P.using.total)) + '%'; $('usetxt').textContent = ITEM[P.using.id].name; } else ub.classList.remove('on');
     // build panel
     const bp = $('buildpanel'); bp.classList.toggle('on', P.buildMode);
-    if (P.buildMode) { const k = P.piece + ':' + P.mat + ':' + Math.floor(G.t * 2); if (bp.dataset.k !== k) { bp.dataset.k = k; bp.innerHTML = '<div class="bp-t">BUILD MODE</div><div class="bp-p">' + PIECE_NAMES.map((n, i) => '<span class="' + (i === P.piece ? 'sel' : '') + '"><i>' + (i + 1) + '</i>' + n + '</span>').join('') + '</div><div class="bp-m">' + BUILD_MATS.map((m, i) => '<span class="' + (i === P.mat ? 'sel' : '') + '" style="--c:' + m.color + '"><b></b>' + m.label + ' <em>' + (P.creative ? '∞' : invCount(P.inv, m.item)) + '/' + m.cost + '</em></span>').join('') + '</div><div class="bp-h">LMB build · RMB edit · R repair · Wheel material</div>'; } }
+    if (P.buildMode) { const k = P.piece + ':' + P.mat + ':' + Math.floor(G.t * 2); if (bp.dataset.k !== k) { bp.dataset.k = k; bp.innerHTML = '<div class="bp-t">BUILD MODE</div><div class="bp-p">' + PIECE_NAMES.map((n, i) => '<span class="' + (i === P.piece ? 'sel' : '') + '"><i>' + (i + 1) + '</i>' + n + '</span>').join('') + '</div><div class="bp-m">' + BUILD_MATS.map((m, i) => '<span class="' + (i === P.mat ? 'sel' : '') + '" style="--c:' + m.color + '"><b></b>' + m.label + ' <em>' + (P.creative ? '∞' : invCount(P.inv, m.item)) + '/' + m.cost + '</em></span>').join('') + '</div><div class="bp-h">B build · G edit · R repair · F/Z or 5-8 material</div>'; } }
     // status top
     const st = $('stormbox');
     if (G.mode === 'br' && Z) {
@@ -5475,7 +5482,7 @@ function isTyping(e) { const t = e.target; return t && (t.tagName === 'INPUT' ||
 function onKeyDown(e) {
   if (isTyping(e)) { if (e.code === 'Escape') e.target.blur(); return; }
   const code = e.code;
-  const gameKeys = ['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'KeyC', 'KeyQ', 'KeyG', 'KeyR', 'KeyE', 'KeyX', 'KeyV', 'KeyM', 'KeyI'];
+  const gameKeys = ['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'KeyC', 'KeyQ', 'KeyG', 'KeyR', 'KeyE', 'KeyX', 'KeyV', 'KeyM', 'KeyI', 'KeyF', 'KeyZ', 'KeyB'];
   if (G.started && (gameKeys.includes(code) || /^Digit[1-9]$/.test(code))) { if (!(e.ctrlKey && code !== 'ControlLeft') && !e.metaKey && !e.altKey) e.preventDefault(); }
   if (!G.started) return;
   const P = G.P; if (!P) return;
@@ -5888,9 +5895,12 @@ setInterval(lobbyWatch, 400); document.addEventListener('pointerdown', () => { t
 { const ub = $('m-uisound'); if (ub) { const ul = () => { ub.textContent = 'UI sounds: ' + (Settings.uiSound ? 'On' : 'Off'); }; ul(); setInterval(ul, 600); ub.addEventListener('click', () => { Settings.uiSound = !Settings.uiSound; saveSettings(); try { Snd.init(); Snd.play('click'); } catch (e) { } ul(); }); } }
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
-sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div id="mp-sizebox"><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">You choose the size. Friends who join with your code get it automatically. Bigger worlds take longer to generate, so keep it small on phones.</div><label for="mp-map" style="margin-top:10px">Map</label><select id="mp-map" class="txt" style="width:100%"></select><div class="lead" style="font-size:13px;margin:0">You choose the map too. Everyone who joins your room gets the same one. Random picks one from your room code.</div></div><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
+sec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Free-for-all on a shared island. Everyone who joins the same room code gets the same world, chests and day cycle. Digging and building sync live, and you respawn after each elimination. Everyone waits in a lobby, and the host starts the match once at least 2 players are in.</p><div class="card"><label for="mp-code">Room code</label><input type="text" id="mp-code" maxlength="16" autocomplete="off" spellcheck="false"><div class="chips"><button class="chip" id="mp-rand">Random code</button></div><label class="mp-opt" for="mp-monsters"><input type="checkbox" id="mp-monsters"><span>Monsters<small>Zombies, skeletons and other hostile creatures. They appear at night, in caves and around ruins. Turn this off for a peaceful world with only animals. Each player chooses for their own game.</small></span></label><label class="mp-opt" for="mp-animals"><input type="checkbox" id="mp-animals"><span>Animals<small>Pigs, cows, wolves and other peaceful creatures. Turn off Monsters and Animals together for a world with no AI creatures at all, just players.</small></span></label><div id="mp-sizebox"><label for="mp-max" style="margin-top:4px">Max players: <span id="mp-max-v" style="color:var(--amber)"></span></label><input type="range" id="mp-max" min="2" max="16" step="1" value="8" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0 0 8px">Players who try to join a full room are turned away.</div><label for="mp-size" style="margin-top:4px">World size: <span id="mp-size-v" style="color:var(--amber)"></span></label><input type="range" id="mp-size" min="6" max="20" step="1" value="12" style="width:100%;accent-color:var(--amber)"><div class="lead" style="font-size:13px;margin:0">You choose the size. Friends who join with your code get it automatically. Bigger worlds take longer to generate, so keep it small on phones.</div><label for="mp-map" style="margin-top:10px">Map</label><select id="mp-map" class="txt" style="width:100%"></select><div class="lead" style="font-size:13px;margin:0">You choose the map too. Everyone who joins your room gets the same one. Random picks one from your room code.</div></div><div class="lead" style="font-size:13px;margin:0">On GitHub or any normal website, rooms are peer to peer: the first player in hosts the room, and if the host leaves the others reconnect automatically.</div><div class="lead" style="font-size:12px;margin:0;opacity:.6">Build: peer-to-peer v3 + lobby</div><div id="mp-status" class="lead"></div></div><div class="col"><button class="btn pri" id="mp-join">Join room</button><button class="btn small" id="mp-back">Back</button></div>';
 $('menu').insertBefore(sec, $('menutoast'));
 css.textContent += '.mpl-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(43,55,80,.6);font-family:var(--display);letter-spacing:.06em;font-size:16px}.mpl-row em{font-style:normal;color:var(--amber);font-size:12px;letter-spacing:.12em}.mpl-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mpl-msg{margin-top:10px}';
+const osec = el('section', 'screen'); osec.id = 'scr-onl';
+osec.innerHTML = '<h2>Online</h2><p class="lead" id="onl-status">Connecting…</p><div class="col"><button class="btn small" id="onl-cancel">Cancel</button></div>';
+$('menu').insertBefore(osec, $('menutoast'));
 const csec = el('section', 'screen'); csec.id = 'scr-mpc';
 csec.innerHTML = '<h2>Multiplayer</h2><p class="lead">Do you want to host a new game or join a friend\'s game?</p><div class="col"><button class="btn pri" id="mpc-host">Host a game</button><button class="btn pri" id="mpc-join">Join with a code</button><button class="btn small" id="mpc-back">Back</button></div>';
 $('menu').insertBefore(csec, $('menutoast'));
@@ -5899,7 +5909,7 @@ lsec.innerHTML = '<h2>Lobby</h2><p class="lead" id="mpl-info"></p><div class="ca
 $('menu').insertBefore(lsec, $('menutoast'));
 const board = el('div'); board.id = 'mp-board'; board.style.display = 'none'; $('hud').appendChild(board);
 const tags = el('div'); tags.style.cssText = 'position:absolute;inset:0;pointer-events:none'; $('hud').appendChild(tags);
-const st = t => { $('mp-status').textContent = t || ''; };
+const st = t => { $('mp-status').textContent = t || ''; const o = $('onl-status'); if (o && L.auto) o.textContent = t || 'Connecting…'; };
 let hashCode = ''; try { hashCode = clean((location.hash || '').slice(1)); } catch (e) { }
 $('mp-code').value = hashCode;
 $('mp-monsters').checked = Store.get('mpmonsters', true) !== false;
@@ -5909,6 +5919,9 @@ $('mp-monsters').addEventListener('change', () => { Store.set('mpmonsters', $('m
 const sizeIn = $('mp-size'), sizeLbl = () => { const n = parseInt(sizeIn.value, 10) || 12; $('mp-size-v').textContent = (n * 16) + ' × ' + (n * 16) + ' blocks'; };
 { let sv = parseInt(Store.get('mpsize', 12), 10); if (!(sv >= 6 && sv <= 20)) sv = 12; sizeIn.value = sv; sizeLbl(); }
 sizeIn.addEventListener('input', () => { sizeLbl(); Store.set('mpsize', parseInt(sizeIn.value, 10)); });
+const maxIn = $('mp-max'), maxLbl = () => { $('mp-max-v').textContent = (parseInt(maxIn.value, 10) || 8) + ' players'; };
+{ let mv = parseInt(Store.get('mpmax', 8), 10); if (!(mv >= 2 && mv <= 16)) mv = 8; maxIn.value = mv; maxLbl(); }
+maxIn.addEventListener('input', () => { maxLbl(); Store.set('mpmax', parseInt(maxIn.value, 10)); });
 const mapSel = $('mp-map');
 mapSel.innerHTML = '<option value="">Random</option>' + MAP_TYPES.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
 { const sm = Store.get('mpmap', ''); mapSel.value = MAP_BY_ID[sm] ? sm : ''; }
@@ -5921,9 +5934,12 @@ const setMode = host => {
   $('mp-rand').style.display = host ? '' : 'none';
   $('mp-code').readOnly = !!host; st('');
 };
-mb.addEventListener('click', () => { Snd.init(); Snd.play('click'); if (hashCode) { setMode(false); UI.showScreen('mp'); } else UI.showScreen('mpc'); });
-$('mpc-host').addEventListener('click', () => { Snd.play('click'); $('mp-code').value = rcode(); setMode(true); UI.showScreen('mp'); });
-$('mpc-join').addEventListener('click', () => { Snd.play('click'); $('mp-code').value = ''; setMode(false); UI.showScreen('mp'); $('mp-code').focus(); });
+const ob = el('button', 'btn pri', 'Play Online'); ob.id = 'm-online'; col.insertBefore(ob, mb);
+ob.addEventListener('click', () => { Snd.init(); Snd.play('click'); L.auto = true; L.cancelled = false; $('mp-code').value = 'public'; setMode(false); $('onl-status').textContent = 'Connecting…'; UI.showScreen('onl'); join(); });
+$('onl-cancel').addEventListener('click', () => { Snd.play('click'); L.cancelled = true; try { MP.room && !MP.active && MP.room.leave(); } catch (e) { } if (!MP.active) MP.room = null; MP.busy = false; UI.showScreen('main'); });
+mb.addEventListener('click', () => { L.auto = false; Snd.init(); Snd.play('click'); if (hashCode) { setMode(false); UI.showScreen('mp'); } else UI.showScreen('mpc'); });
+$('mpc-host').addEventListener('click', () => { L.auto = false; Snd.play('click'); $('mp-code').value = rcode(); setMode(true); UI.showScreen('mp'); });
+$('mpc-join').addEventListener('click', () => { L.auto = false; Snd.play('click'); $('mp-code').value = ''; setMode(false); UI.showScreen('mp'); $('mp-code').focus(); });
 $('mpc-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen('main'); });
 $('mp-back').addEventListener('click', () => { Snd.play('click'); UI.showScreen(hashCode ? 'main' : 'mpc'); });
 $('mp-rand').addEventListener('click', () => { Snd.play('click'); $('mp-code').value = rcode(); });
@@ -5939,8 +5955,9 @@ async function join() {
     let R = null; try { const C = window.claude; R = C && C.use ? await C.use('room') : null; } catch (x) { R = null; }
     if (!R && !window.CraftnitePeerRoom) throw new Error('Multiplayer could not start in this browser.');
     const say = t => { st(t); try { if (MP.active && t) HUD.toast(t); } catch (x) { } };
-    const size = hostMode ? Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)) : 12, key = 'cn-' + code; MP.size = size; MP.map = hostMode && MAP_BY_ID[mapSel.value] ? mapSel.value : '';
+    const size = hostMode ? Math.max(6, Math.min(20, parseInt(sizeIn.value, 10) || 12)) : 12, key = 'cn-' + code; MP.max = hostMode ? Math.max(2, Math.min(16, parseInt(maxIn.value, 10) || 8)) : 0; MP.size = size; MP.map = hostMode && MAP_BY_ID[mapSel.value] ? mapSel.value : '';
     MP.room = R ? await R.join(key) : await window.CraftnitePeerRoom.join(key, say); MP.code = code; st('');
+    if (L.auto && L.cancelled) { try { MP.room.leave(); } catch (x) { } MP.room = null; return; }
     MP.noMonsters = !$('mp-monsters').checked; MP.noAnimals = !$('mp-animals').checked; Store.set('mpanimals', !MP.noAnimals); Store.set('mpmonsters', !MP.noMonsters);
     lobbyEnter();
   } catch (e) {
@@ -5949,23 +5966,36 @@ async function join() {
   } finally { MP.busy = false; MP.joining = false; }
 }
 /* ---------- lobby: wait for players, host starts (needs 2+) ---------- */
-const L = { on: false, starting: false, offs: [], timer: 0 };
+const L = { on: false, starting: false, offs: [], timer: 0, auto: false, cdCount: 0, cdEnd: 0 };
 function lobbyRender(S) {
   const nm = p => esc(String(p.presence.nm || 'Player').replace(/[<>]/g, '').slice(0, 14) || 'Player');
-  $('mpl-count').textContent = S.count + (S.count === 1 ? ' player' : ' players');
+  { const mx = S.amHost ? MP.max : MP.hostMax; $('mpl-count').textContent = S.count + (mx ? ' / ' + mx : '') + (S.count === 1 && !mx ? ' player' : ' players'); }
   $('mpl-list').innerHTML = S.list.map(p => '<div class="mpl-row"><span>' + nm(p) + (p.sameTab ? ' (you)' : '') + '</span>' + (p === S.host ? '<em>HOST</em>' : '') + '</div>').join('') || '<div class="mpl-row"><span>Joining…</span></div>';
   const b = $('mpl-start'); b.style.display = S.amHost ? '' : 'none'; b.disabled = !S.canStart || !MP.conn;
+  let cdMsg = '';
+  if (L.auto && S.amHost && S.canStart && MP.conn) {
+    if (S.count !== L.cdCount) { L.cdCount = S.count; L.cdEnd = Date.now() + 10000; }
+    const left = Math.ceil((L.cdEnd - Date.now()) / 1000);
+    if (left <= 0) { $('mpl-start').click(); return; }
+    cdMsg = 'Match starts in ' + left + 's… (more players can still join)';
+  } else L.cdCount = 0;
   $('mpl-msg').textContent = !MP.conn ? 'Connection lost, reconnecting…'
+    : cdMsg ? cdMsg
+    : L.auto ? (S.count < CraftniteLobby.MIN_PLAYERS ? 'Waiting for other players to join…' : S.amHost ? 'Starting soon…' : 'Waiting for the match to start…')
     : S.amHost ? (S.count < CraftniteLobby.MIN_PLAYERS ? 'Waiting for another player to join… Share the room code ' + MP.code.toUpperCase() + ' with a friend. You can start once at least ' + CraftniteLobby.MIN_PLAYERS + ' players are here.' : 'Press Start game when everyone has joined.')
     : 'Waiting for the host to start the game…';
 }
 function lobbyRefresh() {
   if (!L.on || L.starting || !MP.room) return;
   const S = CraftniteLobby.state(MP.room.peers()); adoptSize(S); adoptMap(S);
+  const hmx = S.host && S.host.presence && S.host.presence.mx; MP.hostMax = (typeof hmx === 'number' && hmx >= 2) ? hmx : 0;
+  if (MP.hostMax && !S.amHost && !S.started && S.me && S.list.indexOf(S.me) >= MP.hostMax) { // room is full
+    lobbyStop(); try { MP.room.leave(); } catch (e) { } MP.room = null; st('This room is full (' + MP.hostMax + ' players max).'); UI.showScreen(L.auto ? 'onl' : 'mp'); return;
+  }
   if (S.started) { lobbyBegin(); return; }
   lobbyRender(S);
 }
-const mplInfo = () => { $('mpl-info').textContent = 'Room code: ' + MP.code.toUpperCase() + ' · world ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks · ' + MAP_BY_ID[mpMapId()].name + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''); };
+const mplInfo = () => { $('mpl-info').textContent = (L.auto ? 'Online game' : 'Room code: ' + MP.code.toUpperCase()) + ' · world ' + (MP.size * 16) + ' × ' + (MP.size * 16) + ' blocks · ' + MAP_BY_ID[mpMapId()].name + (MP.noMonsters ? ' · monsters off' : '') + (MP.noAnimals ? ' · animals off' : ''); };
 // the map actually used: the host's pick, or the seeded random one when the host chose Random
 const mpMapId = () => MAP_BY_ID[MP.map] ? MP.map : pickMapId(hashStr('cn-' + MP.code));
 function adoptMap(S) {
@@ -5983,7 +6013,7 @@ function adoptSize(S) {
 }
 function lobbyEnter() {
   const room = MP.room; L.on = true; L.starting = false; MP.conn = true;
-  room.presence({ lb: 1, sz: MP.size, mp: MP.map || null, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
+  room.presence({ lb: 1, mx: MP.max || null, sz: MP.size, mp: MP.map || null, lj: Date.now(), nm: String(MySkin.name || 'Player').slice(0, 14), go: null }).catch(() => { });
   L.offs = [room.onPeers(lobbyRefresh), room.onConnection(c => { MP.conn = c; lobbyRefresh(); })];
   clearInterval(L.timer); L.timer = setInterval(lobbyRefresh, 500);
   mplInfo();
@@ -5991,7 +6021,7 @@ function lobbyEnter() {
 }
 function lobbyStop() { L.on = false; clearInterval(L.timer); for (const f of L.offs) { try { f(); } catch (e) { } } L.offs = []; }
 function lobbyLeave() {
-  lobbyStop(); try { MP.room && MP.room.leave(); } catch (e) { } MP.room = null; st(''); UI.showScreen('mp');
+  lobbyStop(); try { MP.room && MP.room.leave(); } catch (e) { } MP.room = null; st(''); UI.showScreen(L.auto ? 'main' : 'mp');
 }
 async function lobbyBegin() {
   if (L.starting) return; L.starting = true; lobbyStop(); MP.joining = true;
@@ -6503,4 +6533,83 @@ fb.addEventListener('click',function(){Snd.play('click');try{document.fullscreen
 $('p-controls').insertAdjacentElement('afterend',fb);
 ['controls-list','controls-list2'].forEach(function(id){var h=$(id);if(h)h.insertAdjacentHTML('afterbegin','<div class="how"><h4>Touch (phone or tablet)</h4><p>Left thumb: floating stick, push to the edge to sprint. Right thumb: look. FIRE shoots, mines or swings and can be dragged to aim. AIM toggles zoom for guns and places blocks otherwise. BUILD switches build mode, then WALL / FLOOR / RAMP / ROOF pick the piece, the material button cycles materials, EDIT changes a piece and FIX repairs it. E appears when you can loot something.</p></div>')});
 })()}catch(e){console.error('touch controls failed to load',e)}
+</script>
+<style>
+/* ===== CRAFTNITE :: build hologram upgrade ===== */
+#buildmsg{position:absolute;left:50%;top:57%;transform:translateX(-50%);display:none;padding:5px 14px;background:rgba(40,10,10,.88);border:1px solid var(--bad);color:#ffb0b0;font-family:var(--display);font-size:14px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;pointer-events:none}
+#buildmsg.on{display:block}
+#buildmsg.ok{background:rgba(8,26,40,.85);border-color:var(--sky);color:#bfe9ff}
+.bp-m span.lack em{color:var(--bad)}
+</style>
+<script>
+/* Build hologram: a glowing, outlined preview of the piece at the spot you are aiming at.
+   Blue = you can place it. Red = not enough material, or the spot is blocked.
+   Paste this at the very end of the game file (after the last closing script tag). */
+try { (function () {
+'use strict';
+if (typeof Renderer === 'undefined' || typeof HUD === 'undefined' || typeof G === 'undefined') return;
+
+const OK_COL = 0x4fc3ff, BAD_COL = 0xff3b3b;
+
+/* 12 edges of a unit cube */
+const EDGES = [];
+for (let i = 0; i < 8; i++) for (const bit of [1, 2, 4]) if (!(i & bit)) EDGES.push([i, i | bit]);
+const corner = i => [i & 1, (i >> 1) & 1, (i >> 2) & 1];
+
+Renderer.prototype.setGhost = function (list, ok) {
+  const n = Math.min(list.length, this.GMAX), col = ok ? OK_COL : BAD_COL;
+  this.ghost.count = n; this.ghost.renderOrder = 3;
+  this.ghost.material.opacity = 0.3 + 0.12 * Math.sin(performance.now() / 150);
+  this.pCol.set(col);
+  for (let i = 0; i < n; i++) {
+    this.mtx.makeScale(1.02, 1.02, 1.02); this.mtx.setPosition(list[i][0] + 0.5, list[i][1] + 0.5, list[i][2] + 0.5);
+    this.ghost.setMatrixAt(i, this.mtx); this.ghost.setColorAt(i, this.pCol);
+  }
+  this.ghost.instanceMatrix.needsUpdate = true; if (this.ghost.instanceColor) this.ghost.instanceColor.needsUpdate = true;
+
+  /* outline: every cell's edges, rebuilt only when the shape moves */
+  if (!this.gLines) {
+    const g = new THREE.BufferGeometry(); this.gLinePos = new Float32Array(this.GMAX * 24 * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(this.gLinePos, 3)); g.setDrawRange(0, 0);
+    this.gLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: OK_COL, transparent: true, opacity: 0.95, fog: false }));
+    this.gLines.frustumCulled = false; this.gLines.renderOrder = 4; this.scene.add(this.gLines); this.gKey = null;
+  }
+  this.gLines.visible = n > 0; this.gLines.material.color.setHex(col);
+  let h = n;
+  for (let i = 0; i < n; i++) h = (h * 31 + list[i][0] * 7 + list[i][1] * 13 + list[i][2] * 17) | 0;
+  if (h !== this.gKey) {
+    this.gKey = h; const p = this.gLinePos; let k = 0, e = 0.01;
+    for (let i = 0; i < n; i++) {
+      const [x, y, z] = list[i];
+      for (const [a, b] of EDGES) {
+        const A = corner(a), B = corner(b);
+        p[k++] = x - e + A[0] * (1 + 2 * e); p[k++] = y - e + A[1] * (1 + 2 * e); p[k++] = z - e + A[2] * (1 + 2 * e);
+        p[k++] = x - e + B[0] * (1 + 2 * e); p[k++] = y - e + B[1] * (1 + 2 * e); p[k++] = z - e + B[2] * (1 + 2 * e);
+      }
+    }
+    this.gLines.geometry.setDrawRange(0, n * 24); this.gLines.geometry.attributes.position.needsUpdate = true;
+  }
+};
+
+/* message under the crosshair + red material counts */
+const msg = document.createElement('div'); msg.id = 'buildmsg'; $('hud').appendChild(msg);
+const _hu = HUD.update;
+HUD.update = function (dt) {
+  _hu.apply(this, arguments);
+  try {
+    const P = G.P;
+    if (!P || !P.buildMode || P.dead || G.uiOpen) { msg.classList.remove('on'); if (G.rend && G.rend.gLines && !(P && P.buildMode)) G.rend.gLines.visible = false; return; }
+    const mat = BUILD_MATS[P.mat], have = P.creative ? Infinity : invCount(P.inv, mat.item);
+    let text = '', ok = true;
+    if (have < mat.cost) { ok = false; text = 'Not enough ' + mat.label + ' (' + have + '/' + mat.cost + ')'; }
+    else { const v = pieceValid(P, planPiece(P, PIECE_TYPES[P.piece])); if (!v.ok) { ok = false; text = 'Blocked'; } }
+    msg.textContent = text; msg.classList.toggle('on', !ok);
+    for (const s of $('buildpanel').querySelectorAll('.bp-m span')) { const i = Array.prototype.indexOf.call(s.parentNode.children, s), m = BUILD_MATS[i]; s.classList.toggle('lack', !!m && !P.creative && invCount(P.inv, m.item) < m.cost); }
+  } catch (e) { }
+};
+
+/* hide the outline when build mode is switched off or the session ends */
+const _cs = clearSession;
+clearSession = function () { if (G.rend && G.rend.gLines) G.rend.gLines.visible = false; return _cs.apply(this, arguments); };
+})(); } catch (e) { console.error('hologram patch failed', e); }
 </script>
