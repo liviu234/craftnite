@@ -214,7 +214,7 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
   <div id="clock"></div>
   <div id="objective"></div>
   <div id="alive"><div>PLAYERS <b id="alivenum">0</b></div><div class="kl">ELIMS <b id="killnum">0</b></div></div>
-  <div id="mini"><canvas id="minimap" width="170" height="170"></canvas><div id="biome"></div><div id="coords"></div><div id="fps"></div></div>
+  <div id="mini"><canvas id="minimap" width="170" height="170"></canvas><div id="biome"></div><div id="coords"></div><div id="fps"></div><div id="camind" style="font-size:11px;letter-spacing:.08em;color:#c8d2e6;text-shadow:0 1px 3px #000"></div></div>
   <div id="feedlist"></div>
   <div id="picklist"></div>
   <div id="banner"></div>
@@ -247,7 +247,7 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
 </div>
 <div class="panel" id="mappanel"><div class="pbox" id="mapbox"><canvas id="mapcv" width="800" height="800"></canvas><button class="btn small" id="map-close">Close map (M)</button></div></div>
 <div class="panel" id="pausepanel"><div class="pbox"><h3>Paused</h3>
-  <button class="btn pri" id="p-resume">Resume</button><button class="btn" id="p-save">Save world</button><button class="btn" id="p-settings">Settings</button><button class="btn" id="p-controls">Controls</button><button class="btn" id="p-quit">Quit to menu</button></div></div>
+  <button class="btn pri" id="p-resume">Resume</button><button class="btn" id="p-cam">Camera: Third person</button><button class="btn" id="p-save">Save world</button><button class="btn" id="p-settings">Settings</button><button class="btn" id="p-controls">Controls</button><button class="btn" id="p-quit">Quit to menu</button></div></div>
 <div class="panel" id="settingspanel"><div class="pbox" style="width:min(560px,100%)"><h3>Settings</h3><div id="settings-list2"></div><button class="btn small" id="sp-back">Back</button></div></div>
 <div class="panel" id="controlspanel"><div class="pbox" style="width:min(560px,100%)"><h3>Controls</h3><div id="controls-list2"></div><button class="btn small" id="cp-back">Back</button></div></div>
 <div class="panel end" id="endpanel"><div class="pbox" style="gap:18px;padding:30px 40px;min-width:min(520px,100%)"><h1 id="end-title"></h1><div id="end-sub"></div><div id="end-stats"></div>
@@ -395,7 +395,7 @@ const Store = {
 
 /* ---------- settings ---------- */
 const DEFAULT_SETTINGS = {
-  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, sound: true, uiSound: true, sunShadows: true, volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
+  fov: 78, sens: 1.0, viewDist: 6, renderScale: 1, sound: true, uiSound: true, sunShadows: true, camView: 'third', volume: 0.7, music: 0.35, dmgNumbers: true, shake: true, bob: true,
   invertY: false, crosshair: true, difficulty: 'normal', showFps: false, hints: true, quality: 'high'
 };
 const Settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -410,6 +410,7 @@ function loadSettings() {
   Settings.viewDist = clamp(Math.round(Settings.viewDist), 3, 10); Settings.renderScale = clamp(Settings.renderScale, 0.4, 1.5);
   Settings.volume = clamp(Settings.volume, 0, 1); Settings.music = clamp(Settings.music, 0, 1);
   if (!['beginner', 'normal', 'advanced', 'expert'].includes(Settings.difficulty)) Settings.difficulty = 'normal';
+  if (Settings.camView !== 'first' && Settings.camView !== 'third') Settings.camView = 'third';
 }
 function saveSettings() { Store.set('settings', Settings); }
 
@@ -879,10 +880,10 @@ const STATION_NAMES = { hand: 'By hand', bench: 'Crafting Table', furnace: 'Furn
 
 /* ---------- combat build pieces ---------- */
 const BUILD_MATS = [
-  { id: 'wood', item: 'wood', block: 'b_wood', cost: 5, time: 0.12, label: 'Wood', color: '#c79a5a', hpMul: 1 },
-  { id: 'stone', item: 'stone', block: 'b_stone', cost: 8, time: 0.32, label: 'Stone', color: '#9aa0aa', hpMul: 1 },
-  { id: 'metal', item: 'iron', block: 'b_metal', cost: 10, time: 0.7, label: 'Metal', color: '#c8d4e0', hpMul: 1 },
-  { id: 'alloy', item: 'alloy', block: 'b_alloy', cost: 6, time: 1.2, label: 'Alloy', color: '#5fd0c8', hpMul: 1 }
+  { id: 'wood', item: 'wood', block: 'b_wood', cost: 5, time: 0.08, label: 'Wood', color: '#c79a5a', hpMul: 1 },
+  { id: 'stone', item: 'stone', block: 'b_stone', cost: 8, time: 0.2, label: 'Stone', color: '#9aa0aa', hpMul: 1 },
+  { id: 'metal', item: 'iron', block: 'b_metal', cost: 10, time: 0.4, label: 'Metal', color: '#c8d4e0', hpMul: 1 },
+  { id: 'alloy', item: 'alloy', block: 'b_alloy', cost: 6, time: 0.6, label: 'Alloy', color: '#5fd0c8', hpMul: 1 }
 ];
 const PIECES = ['wall', 'floor', 'ramp', 'roof'];
 
@@ -2502,7 +2503,7 @@ class Renderer {
   }
   setGhost(list, ok) { // list of [x,y,z]
     const n = Math.min(list.length, this.GMAX); this.ghost.count = n;
-    this.pCol.set(ok ? 0x45e07a : 0xff4a4a);
+    this.pCol.set(ok ? 0x55b8ff : 0xff4a4a); this.ghost.material.opacity = 0.34 + 0.1 * Math.sin(performance.now() / 160);
     for (let i = 0; i < n; i++) { this.mtx.makeTranslation(list[i][0] + 0.5, list[i][1] + 0.5, list[i][2] + 0.5); this.ghost.setMatrixAt(i, this.mtx); this.ghost.setColorAt(i, this.pCol); }
     this.ghost.instanceMatrix.needsUpdate = true; if (this.ghost.instanceColor) this.ghost.instanceColor.needsUpdate = true;
   }
@@ -3713,7 +3714,44 @@ function pieceBlocks(pc) {
   }
   return out;
 }
+/* ---- aim-based building (hologram follows the crosshair, snaps to the build grid, no support needed) ---- */
+const BUILD_REACH = 9;
+function buildAim(e) {
+  const cam = G.rend.camera, d = new THREE.Vector3(); cam.getWorldDirection(d);
+  const o = cam.position, eye = eyePos(e);
+  let hit = raycast(o.x, o.y, o.z, d.x, d.y, d.z, 24, 0);
+  if (hit && Math.hypot(hit.px - eye[0], hit.py - eye[1], hit.pz - eye[2]) > BUILD_REACH) hit = null;
+  if (hit) return { x: hit.px + hit.face[0] * 0.03, y: hit.py + hit.face[1] * 0.03, z: hit.pz + hit.face[2] * 0.03, hit };
+  return { x: eye[0] + d.x * 6, y: eye[1] + d.y * 6, z: eye[2] + d.z * 6, hit: null };
+}
+function buildBase(e, ap) { // height of the build grid: follows the nearest piece, else the ground you aim at
+  const w = G.world, gx = Math.floor(ap.x / CELL), gz = Math.floor(ap.z / CELL); let best = null, bd = 1e9;
+  for (const pc of w.pieces.values()) { const dx = Math.abs(pc.gx - gx), dz = Math.abs(pc.gz - gz); if (dx > 2 || dz > 2) continue; const dy = Math.abs(pc.y0 + 2 - ap.y); if (dy > 14) continue; const dd = dx + dz + dy * 0.3; if (dd < bd) { bd = dd; best = pc; } }
+  if (best) return best.y0;
+  if (ap.hit && ap.hit.face[1] > 0) return ap.hit.y;
+  return Math.floor(e.y + 0.05) - 1;
+}
+function segDist(px, pz, ax, az, bx, bz) { const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1), 0, 1); return Math.hypot(px - (ax + dx * t), pz - (az + dz * t)); }
+function planPieceAim(e, type) {
+  const ap = buildAim(e), base = buildBase(e, ap), dir = yawDir(e.yaw);
+  const L = (type === 'wall' || type === 'ramp') ? Math.floor((ap.y - base - 1) / 4 + 0.1) : Math.round((ap.y - 1 - base) / 4), y0 = base + 4 * L;
+  const gx0 = Math.floor(ap.x / CELL), gz0 = Math.floor(ap.z / CELL), cands = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const gx = gx0 + dx, gz = gz0 + dz, lx = ap.x - gx * CELL, lz = ap.z - gz * CELL;
+    if (type === 'wall') { for (let d = 0; d < 4; d++) { const f = DIRS[d]; let dist; if (f[1] !== 0) { const ez = f[1] < 0 ? 0 : CELL; dist = segDist(lx, lz, 0, ez, CELL, ez); } else { const ex = f[0] < 0 ? 0 : CELL; dist = segDist(lx, lz, ex, 0, ex, CELL); } cands.push([dist, { type, dir: d, gx, gz, y0, variant: 0 }]); } }
+    else cands.push([Math.hypot(lx - 1.5, lz - 1.5), { type, dir, gx, gz, y0, variant: 0 }]);
+  }
+  cands.sort((a, b) => a[0] - b[0]);
+  /* nearest grid spot wins. If it is already built on, show it red (no spraying extra pieces while the button is held); if it is only blocked by terrain, slide to the next nearest spot */
+  const w = G.world;
+  for (let i = 0; i < Math.min(cands.length, 8); i++) {
+    const pc = cands[i][1], v = pieceValid(e, pc); if (v.free > 0) return pc;
+    if (v.blocks.some(([x, y, z]) => isBuilt(w.getBlock(x, y, z)))) return pc;
+  }
+  return cands[0][1];
+}
 function planPiece(e, type) {
+  if (e.isPlayer && G.rend) return planPieceAim(e, type);
   const f = DIRS[yawDir(e.yaw)], gx = Math.floor(e.x / CELL), gz = Math.floor(e.z / CELL), feet = Math.floor(e.y + 0.05), pitch = e.pitch;
   const pc = { type, dir: yawDir(e.yaw), gx, gz, y0: feet - 1, variant: 0 };
   const down = pitch < -0.62, up = pitch > 0.62;
@@ -3730,7 +3768,7 @@ function pieceValid(e, pc) {
     if (cellFree(x, y, z) && !bodiesOverlapCell(x, y, z, null)) { free++; }
     for (const [a, b, c] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) { const id = w.getBlock(x + a, y + b, z + c); if (B_SOLID[id] && id !== BK.leaves && id !== BK.spruce_leaves) support = true; }
   }
-  return { ok: free > 0 && support, blocks: bl, free, support };
+  return { ok: free > 0, blocks: bl, free, support }; /* floating pieces are allowed: no support needed to build */
 }
 let pieceId = 1;
 function placePiece(e, type, matIdx) {
@@ -4393,7 +4431,7 @@ function playerUpdate(P, dt) {
   }
   if (I.pressed.KeyQ && !P.creative && G.modeName !== 'creative-x') { P.buildMode = !P.buildMode; P.using = null; HUD.equip(); Snd.play('click'); HUD.hint('build', 'Build mode: 1-4 choose Wall/Floor/Ramp/Roof, wheel changes material, LMB builds, RMB edits, R repairs.'); }
   if (I.pressed.KeyQ && P.creative) { P.buildMode = !P.buildMode; HUD.equip(); Snd.play('click'); }
-  if (I.pressed.KeyV) { G.camMode = G.camMode === 'first' ? 'third' : 'first'; }
+  if (I.pressed.KeyV) { setCamView(G.camMode === 'first' ? 'third' : 'first'); }
   if (I.pressed.KeyX) { const s = P.inv[P.sel]; if (s && !(s.id === 'pickaxe' && s.r === 0 && invCount(P.inv, 'pickaxe') === 1)) { spawnDrop(Object.assign({}, s), P.x - Math.sin(P.yaw) * 0.8, P.y + 1.2, P.z - Math.cos(P.yaw) * 0.8, -Math.sin(P.yaw) * 4, 3, -Math.cos(P.yaw) * 4, 1.2); P.inv[P.sel] = null; G.invDirty = true; Snd.play('click'); } }
   // ---- aim state ----
   const gunHeld = hit && hit.type === 'gun' && !P.buildMode;
@@ -4419,7 +4457,7 @@ function playerUpdate(P, dt) {
   if (P.buildMode) {
     const mat = BUILD_MATS[P.mat], pc = planPiece(P, PIECE_TYPES[P.piece]), v = pieceValid(P, pc);
     G.rend.setGhost(v.blocks, v.ok && (P.creative || invCount(P.inv, mat.item) >= mat.cost)); G.ghostOn = true;
-    if (lmb && P.buildCd <= 0) { if (placePiece(P, PIECE_TYPES[P.piece], P.mat)) P.buildCd = P.creative ? 0.08 : mat.time; else P.buildCd = 0.2; }
+    if (lmb && P.buildCd <= 0) { if (placePiece(P, PIECE_TYPES[P.piece], P.mat)) P.buildCd = P.creative ? 0.08 : mat.time; else P.buildCd = 0.12; }
     if (rmbE && tgt) editPiece(P, tgt);
     if (I.pressed.KeyR && tgt) repairPiece(P, tgt);
     if (I.pressed.KeyG && tgt) editPiece(P, tgt);
@@ -4433,9 +4471,11 @@ function playerUpdate(P, dt) {
     if (hit && (hit.type === 'melee' || hit.type === 'tool') && lmb) { weaponUpdate(P, dt, inp); }
     // LMB behaviours
     if (lmb) {
-      if (hit && hit.type === 'throw' && lmbE) { if (invTake(P.inv, hit.id, 1) || P.creative) { throwItem(P, mkStack(hit.id, 1)); G.invDirty = true; } }
-      else if (hit && hit.type === 'heal' && lmbE) useHeal(P, held);
-      else if (hit && hit.type === 'gadget' && lmbE) { if (useGadget(P, held)) { if (!P.creative) invTake(P.inv, hit.id, 1); G.invDirty = true; } }
+      /* using throwables, heals and gadgets must never fall through to mining (holding LMB while healing used to dig blocks) */
+      if (hit && hit.type === 'throw') { if (lmbE) { P.lmbLatch = true; if (invTake(P.inv, hit.id, 1) || P.creative) { throwItem(P, mkStack(hit.id, 1)); G.invDirty = true; } } }
+      else if (hit && hit.type === 'heal') { if (lmbE) { P.lmbLatch = true; useHeal(P, held); } }
+      else if (hit && hit.type === 'gadget') { if (lmbE) { P.lmbLatch = true; if (useGadget(P, held)) { if (!P.creative) invTake(P.inv, hit.id, 1); G.invDirty = true; } } }
+      else if (P.lmbLatch) { P.mine = null; } /* the button was pressed to use an item: wait for release before digging with whatever is held next */
       else if (hit && hit.id === 'brush_add' || hit && hit.id === 'brush_sub') { if (lmbE) brushUse(P, hit.id === 'brush_add', tgt); }
       else if (hit && hit.id === 'copier') { if (lmbE) copierCorner(P, tgt); }
       else if (!(hit && hit.type === 'gun')) {
@@ -4443,7 +4483,7 @@ function playerUpdate(P, dt) {
         let ent = false; if (hit && (hit.type === 'melee' || hit.type === 'tool')) { const eye = eyePos(P), dd = P.aimV; for (const t of targets(P)) { const h = entHit(t, eye[0], eye[1], eye[2], dd[0], dd[1], dd[2], hit.range || 3.2); if (h) { ent = true; break; } } }
         if (!ent) mineStep(P, dt, tgt, hit); else P.mine = null;
       }
-    } else { P.mine = null; }
+    } else { P.mine = null; P.lmbLatch = false; }
     if (!lmb || (hit && hit.type === 'gun')) P.mine = null;
     // RMB behaviours: place blocks / specials
     if (rmb && !G.aimHeld) {
@@ -4551,6 +4591,11 @@ function contextHints(P) {
 }
 
 /* ===================== camera ===================== */
+/* camera view: first or third person, switchable any time in game (V key, pause menu, touch CAM button) and remembered */
+function setCamView(v, quiet) {
+  v = v === 'first' ? 'first' : 'third'; G.camMode = v; Settings.camView = v; saveSettings();
+  if (!quiet) { try { HUD.toast(v === 'first' ? 'First person view' : 'Third person view'); Snd.play('click'); } catch (e) { } }
+}
 function updateCamera(dt) {
   const P = G.P, R = G.rend, cam = R.camera; if (!P) return;
   let src = P;
@@ -4669,7 +4714,7 @@ async function startSession(mode, opts) {
   const UI = G.ui; if (typeof Menu !== 'undefined') Menu.stop(); UI.loading(true, 'Generating world…', 0);
   await new Promise(r => setTimeout(r, 30));
   clearSession();
-  G.mode = mode; G.modeName = mode; G.difficulty = opts.difficulty || Settings.difficulty; G.tod = mode === 'br' ? 0.38 : opts.tod != null ? opts.tod : 0.32; G.t = 0; G.over = false; G.weather = 0; G.weatherT = 60; G.camMode = 'third'; G.brushR = 3;
+  G.mode = mode; G.modeName = mode; G.difficulty = opts.difficulty || Settings.difficulty; G.tod = mode === 'br' ? 0.38 : opts.tod != null ? opts.tod : 0.32; G.t = 0; G.over = false; G.weather = 0; G.weatherT = 60; G.camMode = Settings.camView === 'first' ? 'first' : 'third'; G.brushR = 3;
   G.dayLen = mode === 'br' ? 1800 : mode === 'creative' ? 1e9 : 1200; G.day = opts.day || 1; G.freezeTime = mode === 'creative';
   let world, sv = opts.save || null;
   const size = opts.size || (mode === 'br' ? 14 : mode === 'survival' ? 13 : 12);
@@ -4758,7 +4803,7 @@ function nextZonePhase(first) {
     }
     Z.tcx = best[0]; Z.tcz = best[1];
   }
-  Z.state = 'wait'; Z.t = first ? 55 + ph.wait : ph.wait; Z.shrinking = false; Z.dmg = ph.dmg; Z.dmgNext = ph.dmg;
+  Z.state = 'wait'; Z.t = first ? 72 : ph.wait; /* first storm forms 1.2 min after the match starts */ Z.shrinking = false; Z.dmg = ph.dmg; Z.dmgNext = ph.dmg;
   if (!first) { Snd.play('zone'); HUD.banner('STORM FORMING', 'Safe zone ' + (i + 1) + ' marked on the map.', '#c070ff'); }
 }
 function updateZone(dt) {
@@ -5136,6 +5181,7 @@ const UI = {
     row('Field of view', slider('fov', 60, 110, 1, v => v + '°')); row('Mouse sensitivity', slider('sens', 0.2, 3, 0.05, v => v.toFixed(2) + '×'));
     row('View distance', slider('viewDist', 3, 10, 1, v => v + ' chunks')); row('Render scale', slider('renderScale', 0.5, 1.25, 0.05, v => Math.round(v * 100) + '%', () => G.rend && G.rend.size(window.innerWidth, window.innerHeight)));
     row('Lobby music on/off', toggle('sound', () => Snd.setVolume())); row('UI sounds (clicks) on/off', toggle('uiSound')); row('Sound volume', slider('volume', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume())); row('Music volume', slider('music', 0, 1, 0.05, v => Math.round(v * 100) + '%', () => Snd.setVolume()));
+    const csel = el('div', 'chips'); for (const [v, n] of [['third', 'Third person'], ['first', 'First person']]) { const c = el('button', 'chip' + (Settings.camView === v ? ' sel' : ''), n); c.addEventListener('click', () => { setCamView(v, true); Snd.play('click'); this.renderSettings(); }); csel.appendChild(c); } row('Camera view (V key switches in game)', csel);
     const dsel = el('div', 'chips'); for (const d of ['beginner', 'normal', 'advanced', 'expert']) { const c = el('button', 'chip' + (Settings.difficulty === d ? ' sel' : ''), d[0].toUpperCase() + d.slice(1)); c.addEventListener('click', () => { Settings.difficulty = d; saveSettings(); this.renderSettings(); }); dsel.appendChild(c); } row('AI difficulty (next match)', dsel);
     row('Sun shadows (turn off if slow)', toggle('sunShadows')); row('Damage numbers', toggle('dmgNumbers')); row('Screen shake', toggle('shake')); row('View bob (first person)', toggle('bob')); row('Invert Y axis', toggle('invertY')); row('Crosshair', toggle('crosshair')); row('Show FPS', toggle('showFps')); row('Gameplay hints', toggle('hints'));
     const rb = el('button', 'btn small', 'Reset hints'); rb.addEventListener('click', () => { Store.del('hints'); G.hintsShown = {}; HUD.toast('Hints reset'); }); row('Tutorial hints', rb);
@@ -5836,6 +5882,9 @@ setInterval(lobbyWatch, 400); document.addEventListener('pointerdown', () => { t
   const vi = $('m-vol'), vl = () => { $('m-vol-v').textContent = Math.round(Settings.volume * 100) + '%'; };
   if (vi) { vi.value = Settings.volume; vl(); vi.addEventListener('input', () => { Settings.volume = parseFloat(vi.value); saveSettings(); try { Snd.init(); Snd.setVolume(); } catch (e) { } vl(); }); vi.addEventListener('change', () => { try { Snd.play('click'); } catch (e) { } }); }
   sb.addEventListener('click', () => { Settings.sound = !Settings.sound; saveSettings(); try { Snd.init(); Snd.setVolume(); Snd.play('click'); lobbyWatch(); } catch (e) { } sl(); }); } }
+{ const pc = $('p-cam'), ci = $('camind'), cl = () => { const t = G.camMode === 'first' ? 'First person' : 'Third person'; if (pc) pc.textContent = 'Camera: ' + t + ' (click to switch)'; if (ci) ci.textContent = 'V · ' + t; };
+  if (pc) pc.addEventListener('click', () => { setCamView(G.camMode === 'first' ? 'third' : 'first', true); try { Snd.play('click'); } catch (e) { } cl(); });
+  setInterval(cl, 250); cl(); }
 { const ub = $('m-uisound'); if (ub) { const ul = () => { ub.textContent = 'UI sounds: ' + (Settings.uiSound ? 'On' : 'Off'); }; ul(); setInterval(ul, 600); ub.addEventListener('click', () => { Settings.uiSound = !Settings.uiSound; saveSettings(); try { Snd.init(); Snd.play('click'); } catch (e) { } ul(); }); } }
 const mb = el('button', 'btn', 'Multiplayer'); mb.id = 'm-mp'; const col = document.querySelector('#scr-main .col'); col.insertBefore(mb, $('m-play').nextSibling);
 const sec = el('section', 'screen'); sec.id = 'scr-mp';
