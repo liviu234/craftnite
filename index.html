@@ -3907,6 +3907,7 @@ function idleWatch(b, br, state, dt) {
   br.goalT = 12;
 }
 function stuckCheck(b, dt) {
+  botDodge(b);
   const br = b.brain;
   br.stuckT = (br.stuckT || 0);
   const moving = Math.abs(b.wishX) + Math.abs(b.wishZ) > 0.1;
@@ -3984,7 +3985,15 @@ function botCanSee(b, t, D) {
   return !segBlocked(e0[0], e0[1], e0[2], e1[0], e1[1], e1[2]);
 }
 function enemiesOf(b) { const out = []; if (G.P && !G.P.dead && !G.P.spectate) out.push(G.P); for (const o of G.bots) if (o !== b && !o.dead) out.push(o); return out; }
-function inZone(x, z, margin) { const Z = G.zone; if (!Z) return true; return Math.hypot(x - Z.cx, z - Z.cz) <= Z.r - (margin || 0); }
+/* bots look ahead: for the last ~28 s before a shrink, and during it, 'safe' means inside the NEXT circle */
+function zoneSoon(Z) { return !!Z && (Z.state === 'shrink' || (Z.state === 'wait' && Z.t < 28 && Z.tr > 5)); }
+function inZone(x, z, margin) { const Z = G.zone; if (!Z) return true; if (zoneSoon(Z)) return Math.hypot(x - Z.tcx, z - Z.tcz) <= Z.tr - (margin || 0); return Math.hypot(x - Z.cx, z - Z.cz) <= Z.r - (margin || 0); }
+function botArmed(e) { if (!e || !e.inv) return false; for (const s of e.inv) if (s && ITEM[s.id].type === 'gun') return true; return false; }
+/* run from live grenades (including their own) */
+function botDodge(b) {
+  if (b.para || b.dive || (b.brain && b.brain.healUse)) return;
+  for (const p of G.projs) { if (p.kind !== 'grenade' || p.fuse > 2.0) continue; const d = Math.hypot(p.x - b.x, p.z - b.z); if (d > (p.radius || 5) + 1.5) continue; const l = d || 1; b.wishX = (b.x - p.x) / l; b.wishZ = (b.z - p.z) / l; b.sprint = true; b.speed = 5.6; return; }
+}
 function botUpdate(b, dt) {
   const br = b.brain, D = DIFF[G.difficulty] || DIFF.normal, inp = b.inp, w = G.world;
   inp.fire = false; inp.fireEdge = false; inp.aim = false; inp.reload = false; inp.attack = false;
@@ -4009,10 +4018,10 @@ function botUpdate(b, dt) {
   if (br.perT <= 0) {
     br.perT = 0.18 + Math.random() * 0.08;
     let seen = null, sd = 1e9;
-    for (const e of enemiesOf(b)) { if (botCanSee(b, e, D)) { const d = Math.hypot(e.x - b.x, e.z - b.z); if (d < sd) { sd = d; seen = e; } } }
+    for (const e of enemiesOf(b)) { if (botCanSee(b, e, D)) { const d = Math.hypot(e.x - b.x, e.z - b.z) * (1 - Math.min(0.3, (100 - Math.min(100, e.hp + (e.sh || 0))) / 250)); if (d < sd) { sd = d; seen = e; } } }
     if (seen) { if (br.enemy !== seen || G.t - br.lastSeenT > 1.5) { br.react = D.react * (0.7 + Math.random() * 0.6); } br.enemy = seen; br.lastSeenT = G.t; br.ls = { x: seen.x, y: seen.y, z: seen.z, vx: seen.vx, vz: seen.vz }; }
     else if (br.enemy && (br.enemy.dead || G.t - br.lastSeenT > D.patience)) { br.enemy = null; }
-    if (b.hear && G.t - b.hear.t < 0.5 && !seen && Math.hypot(b.hear.x - b.x, b.hear.z - b.z) < D.hearing) { br.invest = { x: b.hear.x + rnd(-6, 6), z: b.hear.z + rnd(-6, 6), t: G.t + 9 }; b.hear = null; }
+    if (b.hear && G.t - b.hear.t < 0.5 && !seen && b.hp + b.sh >= 50 && Math.hypot(b.hear.x - b.x, b.hear.z - b.z) < D.hearing) { br.invest = { x: b.hear.x + rnd(-6, 6), z: b.hear.z + rnd(-6, 6), t: G.t + 9 }; b.hear = null; }
     if (b.lastAtk && G.t - (b.lastAtkT || -9) < 0.6 && !seen) { const a = b.lastAtk; if (a && !a.dead) { br.invest = { x: a.x + rnd(-4, 4), z: a.z + rnd(-4, 4), t: G.t + 8 }; br.react = Math.min(br.react, 0.2); } }
   }
   const enemy = br.enemy, vis = enemy && G.t - br.lastSeenT < 0.4;
@@ -4033,6 +4042,7 @@ function botUpdate(b, dt) {
   else if (br.invest && G.t < br.invest.t) state = 'search';
   else state = 'loot';
   if (state === 'fight' && b.hp + b.sh < 38 && vis && br.fleeT <= 0) { br.fleeT = 2.5 + Math.random() * 2; state = 'flee'; }
+  if (state === 'fight' && vis && !botHasGun(b) && botArmed(enemy) && Math.hypot(enemy.x - b.x, enemy.z - b.z) > 5) { br.fleeT = Math.max(br.fleeT, 3); state = 'flee'; }
   br.state = state;
   // ---- weapon choice ----
   const dEn = enemy && br.ls ? Math.hypot(br.ls.x - b.x, br.ls.z - b.z) : 30;
@@ -4041,7 +4051,7 @@ function botUpdate(b, dt) {
   // ---- behaviours ----
   if (state === 'fight') botFight(b, br, D, enemy, vis, dEn, dt);
   else if (state === 'flee') botFlee(b, br, D, enemy, dt);
-  else if (state === 'zone') { const Z = G.zone; followPath(b, Z.cx + rnd(-1, 1), Z.cz + rnd(-1, 1), 1, dt); b.sprint = true; b.speed = 5.2; if (b.inWater) b.jumpHeld = true; if (G.zone.shrinking || outside) { /* if far and bridging needed */ } tryTowardZoneBuild(b, br, D, dt); }
+  else if (state === 'zone') { const Z = G.zone; if (zoneSoon(Z)) followPath(b, Z.tcx + rnd(-1, 1), Z.tcz + rnd(-1, 1), 1, dt); else followPath(b, Z.cx + rnd(-1, 1), Z.cz + rnd(-1, 1), 1, dt); b.sprint = true; b.speed = 5.2; if (b.inWater) b.jumpHeld = true; if (G.zone.shrinking || outside) { /* if far and bridging needed */ } tryTowardZoneBuild(b, br, D, dt); }
   else if (state === 'search') { const iv = br.invest; const d = followPath(b, iv.x, iv.z, 0.85, dt); if (d < 3) { br.invest = null; } b.sprint = d > 14; if (b.sprint) b.speed = 5.2; }
   else botLoot(b, br, D, dt);
   if (b.inWater) b.jumpHeld = true;
@@ -4098,7 +4108,7 @@ function botLoot(b, br, D, dt) {
 function botPickPOI(b) {
   const pois = G.world.pois.filter(p => !p.hidden && p.type !== 'tower' || Math.random() < 0.3);
   const Z = G.zone; let best = null, bs = -1e9;
-  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (sc > bs) { bs = sc; best = p; } }
+  for (let i = 0; i < 6; i++) { const p = pick(G.world.pois.length ? G.world.pois : [{ x: G.world.W / 2, z: G.world.D / 2 }]); const d = Math.hypot(p.x - b.x, p.z - b.z); let sc = -d * 0.6 + (p.type === 'city' || p.type === 'fortress' || p.type === 'pyramid' ? 25 : 0) + Math.random() * 30; if (Z && !inZone(p.x, p.z, 8)) sc -= 80; if (Z && Z.state !== 'final' && Math.hypot(p.x - Z.tcx, p.z - Z.tcz) > Z.tr + 10) sc -= 45; if (sc > bs) { bs = sc; best = p; } }
   return best || { x: G.world.W / 2, z: G.world.D / 2 };
 }
 function botGather(b, br, D, dt) {
@@ -4166,7 +4176,7 @@ function botFight(b, br, D, enemy, vis, dEn, dt) {
   const ideal = st ? Math.max(7, st.range * 0.3) : 2.2;
   if (br.coverT > 0 && br.coverPos) { followPath(b, br.coverPos.x, br.coverPos.z, 1, dt); b.sprint = true; }
   else {
-    if (br.strafeT <= 0) { br.strafeT = rnd(0.6, 1.8); br.strafe = Math.random() < 0.5 ? -1 : 1; }
+    if (br.strafeT <= 0 || (G.t - b.lastHurt < 0.25 && G.t - (br.flipT || -9) > 0.7)) { br.flipT = G.t; br.strafeT = rnd(0.5, 1.6); br.strafe = Math.random() < 0.7 ? -br.strafe : br.strafe; }
     const fx = -Math.sin(Math.atan2(-dx, -dz)), fz = -Math.cos(Math.atan2(-dx, -dz));
     let mf = 0; if (dEn > ideal + 9) mf = 1; else if (dEn < ideal - 5) mf = -0.7; else if (!vis) mf = 1;
     const sm = D.strafe * (vis ? 1 : 0.2);
