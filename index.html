@@ -201,6 +201,7 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
 .endbtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.endbtns .btn{width:auto;min-width:170px;text-align:center}
 @media (max-width:760px){#invgrid{grid-template-columns:repeat(9,38px)}.islot{width:38px;height:38px}.islot img{width:30px;height:30px}.hslot{width:38px;height:38px}.hslot img{width:30px;height:30px}#vitals{width:34vw;bottom:60px}#minimap{width:110px;height:110px}#mini{width:110px}#feedlist{top:150px}.srow{grid-template-columns:1fr}.slot{grid-template-columns:1fr 1fr}.slot span{grid-column:1/-1}}
 @media (prefers-reduced-motion:reduce){#banner.show{animation:none;opacity:1}#hurt.on{animation:none}}
+#tradebox{min-width:min(480px,100%);gap:10px}#tr-sub{color:var(--dim);font-family:var(--body);margin:-6px 0 4px}#tr-list{display:flex;flex-direction:column;gap:6px}
 </style>
 <div id="app">
 <canvas id="game"></canvas>
@@ -254,6 +255,7 @@ h2{font-family:var(--display);font-size:34px;letter-spacing:.06em;margin:0;text-
   <div class="endbtns"><button class="btn pri" id="e-again">Play again</button><button class="btn" id="e-spec">Spectate</button><button class="btn" id="e-menu">Main menu</button></div></div></div>
 <div class="panel end" id="deathpanel"><div class="pbox" style="gap:18px;padding:30px 40px;min-width:min(480px,100%)"><h1 style="color:#ff6b6b">YOU DIED</h1><div id="death-sub" style="text-align:center;color:var(--dim);font-family:var(--body);font-size:16px;max-width:40ch"></div>
   <div class="endbtns"><button class="btn pri" id="d-respawn">Respawn</button><button class="btn" id="d-menu">Main menu</button></div></div></div>
+<div class="panel" id="tradepanel"><div class="pbox" id="tradebox"><h3 id="tr-title"></h3><div id="tr-sub"></div><div id="tr-list"></div><button class="btn small" id="tr-close">Close (E)</button></div></div>
 <div id="cursorstack"></div><div id="tooltip"></div>
 
 <!-- main menu -->
@@ -4464,8 +4466,10 @@ function playerUpdate(P, dt) {
   if (tgt) { const id = tgt.id; if (id >= BK.chest0 && id <= BK.chest3 && !w.opened.has(w.key(tgt.x, tgt.y, tgt.z))) G.prompt = { text: 'Open ' + BD[id].label, c: { x: tgt.x, y: tgt.y, z: tgt.z } }; else if (id === BK.chest_open) { const ck = w.key(tgt.x, tgt.y, tgt.z); if (w.chestCd.has(ck)) G.prompt = { text: 'Chest empty · refills in ' + chestCdText(ck), info: true }; } else if (id === BK.bench || id === BK.furnace || id === BK.forge) G.prompt = { text: 'Use ' + BD[id].label, station: true }; }
   const nd = nearestDrop(P.x, P.y + 0.9, P.z, 3.2, true);
   if (nd) { G.prompt = { text: 'Pick up ' + itemName(nd.stack) + (nd.stack.n > 1 ? ' ×' + nd.stack.n : ''), drop: nd, stack: nd.stack }; }
+  if (!G.prompt) vPrompt(P);
   if (I.pressed.KeyE) {
-    if (G.prompt && G.prompt.drop) { pickupGear(P, G.prompt.drop); }
+    if (G.prompt && G.prompt.vil) { vOpenTrade(G.prompt.vil); }
+    else if (G.prompt && G.prompt.drop) { pickupGear(P, G.prompt.drop); }
     else if (G.prompt && G.prompt.c) { openChest(P, G.prompt.c.x, G.prompt.c.y, G.prompt.c.z); }
     else if (G.prompt && G.prompt.station) { HUD.openInventory(true); }
   }
@@ -4742,6 +4746,7 @@ async function startSession(mode, opts) {
   else { const sd = opts.seed != null ? opts.seed : Math.floor(Math.random() * 1e9); world = new World({ seed: sd, cw: size, cd: size, type: mode === 'creative' ? (opts.worldType || 'flat') : 'island', map: MAP_BY_ID[opts.map] ? opts.map : pickMapId(sd) }); }
   G.world = world; G.worldMeta = { seed: world.seed, cw: world.cw, cd: world.cd, type: world.type, map: world.map };
   await runGenerator(world, p => UI.loading(true, 'Generating world…', p * 0.7));
+  G.vSave = sv || null;
   if (sv) { world.applyEdits(sv.edits || []); for (const k of (sv.opened || [])) { world.opened.add(k); const ch = world.chests.get(k); if (ch) world.chestCd.set(k, CHEST_CD[ch.kind] || 30); } for (const [k, id] of world.edits) if (id === BK.sapling) world.growing.push({ k, t: rnd(10, 30) }); }
   G.rend.setWorld(world);
   // player
@@ -5596,6 +5601,226 @@ function boot() {
     window.craftnite = { G, UI, HUD, Input, startSession };
   } catch (err) { console.error(err); const m = $('bootmsg'); m.style.display = 'flex'; m.querySelector('p').textContent = 'Craftnite failed to start: ' + (err && err.message || err); }
 }
+/* ===================== VILLAGES: generation, working villagers, trading ===================== */
+const V_TOWN = ['Oakhaven', 'Willowmere', 'Stonebrook', 'Ashford', 'Millbrook', 'Fernhollow', 'Larkspur', 'Thornfield'];
+const V_FIRST = ['Alden', 'Bryn', 'Cora', 'Doran', 'Edda', 'Finn', 'Greta', 'Hale', 'Ivo', 'Juno', 'Kade', 'Lena', 'Mira', 'Nolan', 'Orin', 'Pia'];
+const V_ROLES = {
+  farmer: { label: 'Farmer', shirt: 0x7f9a3c, pants: 0x5a4326, hair: 0x4a2f1d, offers: [{ g: { fiber: 3 }, o: ['steak', 2, 0], max: 6, n: 4 }, { g: { fiber: 2 }, o: ['sapling', 2, 0], max: 8, n: 8 }] },
+  smith: { label: 'Smith', shirt: 0x4a4a52, pants: 0x2a2a30, hair: 0x1b1410, offers: [{ g: { stone: 6, wood: 2 }, o: ['sword', 1, 1], max: 3, n: 2 }, { g: { iron: 8 }, o: ['pickaxe', 1, 2], max: 2, n: 1 }, { g: { copper: 3, wood: 3 }, o: ['arrow', 12, 0], max: 6, n: 4 }, { g: { copper: 3 }, o: ['shield_s', 2, 0], max: 4, n: 2 }] },
+  elder: { label: 'Elder', shirt: 0x6a3a8a, pants: 0x4a2a62, hair: 0xd9d9de, offers: [{ g: { crystal: 3 }, o: ['medkit', 1, 0], max: 2, n: 1 }, { g: { scrap: 6 }, o: ['ammo_m', 24, 0], max: 3, n: 2 }, { g: { meat: 2 }, o: ['bandage', 3, 0], max: 6, n: 4 }] },
+  guard: { label: 'Guard', shirt: 0x8a93a3, pants: 0x3a3f4a, hair: 0x1b1410, hat: 3, offers: [] }
+};
+const V_CREW = { farmer: 2, smith: 1, elder: 1, guard: 2 };
+MOB_DEF.villager = { hp: 30, speed: 2.4, w: 0.6, h: 1.8, drops: [['meat', 0, 1]] };
+MOB_MODELS.villager = () => buildBiped({ skin: 0xe8b48a, hair: 0x4a2f1d, shirt: 0x7f9a3c, pants: 0x5a4326 });
+
+/* ---------- world generation ---------- */
+function vHouse(w, x0, z0, y0, door) {
+  w.box(x0, y0 - 1, z0, x0 + 4, y0 - 1, z0 + 4, BK.planks);
+  w.box(x0, y0, z0, x0 + 4, y0 + 2, z0 + 4, BK.planks); w.box(x0 + 1, y0, z0 + 1, x0 + 3, y0 + 2, z0 + 3, 0);
+  for (const [a, b] of [[0, 0], [4, 0], [0, 4], [4, 4]]) w.box(x0 + a, y0, z0 + b, x0 + a, y0 + 2, z0 + b, BK.log);
+  w.box(x0 - 1, y0 + 3, z0 - 1, x0 + 5, y0 + 3, z0 + 5, BK.stonebrick); w.box(x0, y0 + 4, z0, x0 + 4, y0 + 4, z0 + 4, BK.stonebrick); w.box(x0 + 1, y0 + 5, z0 + 1, x0 + 3, y0 + 5, z0 + 3, BK.stonebrick);
+  const dz = door === 'S' ? z0 + 4 : z0, bz = door === 'S' ? z0 + 1 : z0 + 3;
+  w.box(x0 + 2, y0, dz, x0 + 2, y0 + 1, dz, 0);
+  w.put(x0, y0 + 1, z0 + 2, BK.glass); w.put(x0 + 4, y0 + 1, z0 + 2, BK.glass);
+  w.put(x0 + 1, y0, bz, BK.wool_red); w.put(x0 + 2, y0, bz, BK.wool_red); w.put(x0 + 3, y0 + 2, z0 + 2, BK.lamp);
+  return { x: x0 + 2.5, y: y0, z: z0 + 2.5, out: { x: x0 + 2.5, z: door === 'S' ? z0 + 5.5 : z0 - 1.5 } };
+}
+World.prototype.genVillage = function (cx, cz, g, rng) {
+  const bio = this.biomeAt(cx, cz), top = bio === BIO.DESERT ? BK.sand : bio === BIO.SNOW ? BK.snow : BK.grass, y0 = g + 1;
+  const name = V_TOWN[(Math.floor(rng() * V_TOWN.length) + this.villages.length) % V_TOWN.length];
+  for (const [k, c] of [...this.chests]) if (Math.abs(c.x - cx) <= 25 && Math.abs(c.z - cz) <= 15) this.chests.delete(k);
+  this.lootSpots = this.lootSpots.filter(s => !(Math.abs(s.x - cx) <= 25 && Math.abs(s.z - cz) <= 15));
+  this.pad(cx - 24, cz - 14, cx + 24, cz + 14, g, top, 14);
+  for (let i = -23; i <= 23; i++) this.put(cx + i, g, cz, BK.gravel);
+  for (let i = -13; i <= 13; i++) this.put(cx, g, cz + i, BK.gravel);
+  const homes = [[-11, -11, 'S'], [7, -11, 'S'], [-11, 7, 'N'], [7, 7, 'N']].map(([dx, dz, d]) => vHouse(this, cx + dx, cz + dz, y0, d));
+  // well
+  this.box(cx - 1, y0, cz - 1, cx + 1, y0, cz + 1, BK.stonebrick); this.put(cx, y0, cz, 0); this.put(cx, g, cz, BK.water);
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.box(cx + a, y0 + 1, cz + b, cx + a, y0 + 2, cz + b, BK.log);
+  this.box(cx - 1, y0 + 3, cz - 1, cx + 1, y0 + 3, cz + 1, BK.planks); this.put(cx, y0 + 2, cz, BK.lamp);
+  // market stall (elder)
+  this.box(cx + 3, y0, cz + 4, cx + 5, y0, cz + 4, BK.planks);
+  for (const px of [cx + 2, cx + 6]) this.box(px, y0, cz + 4, px, y0 + 2, cz + 4, BK.log);
+  for (let x = cx + 2; x <= cx + 6; x++) for (let z = cz + 3; z <= cz + 5; z++) this.put(x, y0 + 3, z, (x + z) & 1 ? BK.wool_red : BK.wool_white);
+  // smithy (open front facing the square)
+  const sx = cx - 20;
+  this.box(sx, y0, cz - 2, sx + 6, y0 + 2, cz + 2, BK.stonebrick); this.box(sx + 1, y0, cz - 1, sx + 6, y0 + 2, cz + 1, 0);
+  this.box(sx - 1, y0 + 3, cz - 3, sx + 7, y0 + 3, cz + 3, BK.planks);
+  this.put(sx + 1, y0, cz - 1, BK.furnace); this.put(sx + 1, y0, cz + 1, BK.bench); this.put(sx + 3, y0, cz, BK.metal_plate); this.put(sx + 2, y0 + 2, cz, BK.lamp);
+  this.addChest(sx + 1, y0, cz, 0); this.lootSpots.push({ x: sx + 2, y: y0, z: cz, kind: 0 });
+  // farm: tilled rows around a water channel, ripe crops
+  const fx = cx + 18, cells = [];
+  for (let z = cz - 4; z <= cz + 4; z++) for (let x = fx - 4; x <= fx + 4; x++) {
+    this.put(x, g, z, x === fx ? BK.water : BK.dirt);
+    if (x !== fx && (z - cz) % 2 === 0) { this.put(x, y0, z, BK.flower_y); cells.push({ x, y: y0, z, st: 2, t: 0, taken: null }); }
+  }
+  for (const [a, b] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) { this.box(fx + a, y0, cz + b, fx + a, y0 + 1, cz + b, BK.log); this.put(fx + a, y0 + 2, cz + b, BK.lamp); }
+  const P = (x, z) => [x + 0.5, z + 0.5];
+  this.villages.push({ name, cx, cz, g, y0, homes, cells, angry: 0, nextSpawn: 0, seen: false, smith: { x: sx + 4.5, z: cz + 0.5 }, stall: { x: cx + 4.5, z: cz + 5.5 }, well: { x: cx + 0.5, z: cz + 0.5 }, patrol: [P(cx - 9, cz), P(cx + 9, cz), P(cx, cz - 9), P(cx, cz + 9)] });
+  this.pois.push({ name: name + ' Village', x: cx, z: cz, y: y0, type: 'house' });
+};
+const _vGenStruct = World.prototype.genStructures;
+World.prototype.genStructures = function* (rng) {
+  yield* _vGenStruct.call(this, rng);
+  this.villages = [];
+  if (this.W < 160 || this.D < 160) return;
+  const vr = mulberry32(this.seed ^ 0x51F1), want = Math.max(1, Math.round(this.W / 110));
+  for (let t = 0; t < 200 && this.villages.length < want; t++) {
+    const cx = 30 + Math.floor(vr() * (this.W - 60)), cz = 30 + Math.floor(vr() * (this.D - 60)), bio = this.biomeAt(cx, cz);
+    if (bio !== BIO.PLAINS && bio !== BIO.FOREST && bio !== BIO.DESERT && bio !== BIO.SNOW) continue;
+    let lo = 999, hi = 0, ok = true;
+    for (let dz = -14; dz <= 14 && ok; dz += 4) for (let dx = -24; dx <= 24; dx += 4) {
+      const x = cx + dx, z = cz + dz, h = this.colH[x + z * this.W], b = this.biomeAt(x, z);
+      if (h < SEA + 2 || b === BIO.OCEAN || b === BIO.VOLCANO || b === BIO.CITY) { ok = false; break; }
+      lo = Math.min(lo, h); hi = Math.max(hi, h);
+    }
+    if (!ok || hi - lo > 4) continue;
+    if (this.pois.some(p => Math.hypot(p.x - cx, p.z - cz) < 50) || this.villages.some(v => Math.hypot(v.cx - cx, v.cz - cz) < 90)) continue;
+    this.genVillage(cx, cz, Math.round((lo + hi) / 2), vr); yield 0.99;
+  }
+};
+
+/* ---------- villagers ---------- */
+function vMake(v, role, i, d) {
+  const R = V_ROLES[role], hp = role === 'guard' ? 70 : 30, nm = V_FIRST[Math.floor(Math.random() * V_FIRST.length)];
+  const m = mkBody({ kind: 'mob', type: 'villager', vil: true, village: v, role, name: d ? d.name : nm + ' the ' + R.label, x: d ? d.x : v.cx + 0.5 + rnd(-3, 3), y: d ? d.y : v.y0, z: d ? d.z : v.cz + 3.5 + rnd(-0.5, 0.5), w: 0.6, h: 1.8, eye: 1.5, hp, maxHp: hp, speed: 2.4, stepH: 1, blood: 0xd23a3a, guard: true, angle: 1.8 + rnd(0, 4.4), pi: i % 4, homeI: i });
+  m.def = MOB_DEF.villager; m.home = v.homes[i % v.homes.length];
+  m.brain = { state: 'idle', t: rnd(1, 3), dir: 0, atkCd: 0, path: null, pathT: 0, pi: 0, stuckT: 0, sndT: 99, target: null };
+  m.offers = R.offers.map(o => ({ g: o.g, o: o.o, max: o.max, s: o.n })); m.prog = 0;
+  const skin = d && d.skin != null ? d.skin : parseInt(SKIN_TONES[Math.floor(Math.random() * SKIN_TONES.length)].slice(1), 16); m.skinC = skin;
+  if (d) { m.hp = clamp(+d.hp || hp, 1, hp); m.prog = d.prog | 0; m.yaw = +d.yaw || 0; (d.s || []).forEach((n, k) => { if (m.offers[k]) m.offers[k].s = clamp(n | 0, 0, m.offers[k].max); }); }
+  m.model = buildBiped({ skin, hair: R.hair, shirt: R.shirt, pants: R.pants, hat: R.hat || 0 });
+  const hd = m.model.userData.head, nose = new THREE.Mesh(boxGeo(0.1, 0.16, 0.1), lam(skin)); nose.position.set(0, -0.04, -0.3); hd.add(nose);
+  if (role === 'farmer') for (const [w, h, y] of [[0.9, 0.05, 0.3], [0.5, 0.14, 0.38]]) { const s = new THREE.Mesh(boxGeo(w, h, w), lam(0xd9b85a)); s.position.y = y; hd.add(s); }
+  if (role === 'guard') { m.inv = makeInv(); m.inv[0] = mkStack('sword', 1, 1); m.sel = 0; }
+  m.model.userData.walkPh = Math.random() * 6; if (G.rend) G.rend.scene.add(m.model);
+  if (!d) m.yaw = rnd(0, TAU);
+  m.onHurt = function (src) { const vv = this.village; if (src === G.P) { if (vv.angry <= 0) HUD.toast('The villagers of ' + vv.name + ' are furious!', true); vv.angry = 150; } if (this.role !== 'guard') this.fleeT = 6; };
+  return m;
+}
+function vSpawnAll() {
+  const w = G.world, S = G.vSave && G.vSave.vil, vs = w.villages || [];
+  if (S && Array.isArray(S.v) && Array.isArray(S.m)) {
+    S.v.forEach((sv, i) => { const v = vs[i]; if (!v || !sv) return; v.angry = Math.max(0, +sv.a || 0); (sv.c || []).forEach((rem, k) => { const c = v.cells[k]; if (c && rem > 0) { c.st = 1; c.t = G.t + rem; w.setBlock(c.x, c.y, c.z, BK.tallgrass, true); } }); });
+    for (const d of S.m) { const v = vs[d.v]; if (v && V_ROLES[d.r] && isFinite(d.x) && isFinite(d.z)) G.mobs.push(vMake(v, d.r, d.i | 0, d)); }
+    return;
+  }
+  for (const v of vs) ['farmer', 'farmer', 'smith', 'elder', 'guard', 'guard'].forEach((r, i) => G.mobs.push(vMake(v, r, i)));
+}
+function vPack() {
+  const w = G.world;
+  return { v: w.villages.map(v => ({ a: Math.round(v.angry), c: v.cells.map(c => c.st === 2 ? 0 : Math.max(1, Math.ceil(c.t - G.t))) })),
+    m: G.mobs.filter(m => m.vil && !m.dead).map(m => ({ v: w.villages.indexOf(m.village), r: m.role, i: m.homeI | 0, name: m.name, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), yaw: +m.yaw.toFixed(2), hp: Math.round(m.hp), prog: m.prog, skin: m.skinC, s: m.offers.map(o => o.s) })) };
+}
+const _vPack = Save.pack; Save.pack = function (mode) { const d = _vPack.call(this, mode); if (mode === 'survival' && G.world && G.world.villages) d.vil = vPack(); return d; };
+function vGo(m, gx, gz, spd, dt, stop) {
+  const dx = gx - m.x, dz = gz - m.z, d = Math.hypot(dx, dz); m.speed = spd;
+  if (d > (stop || 0.6)) { if (d > 7 && !m.inside) followPath(m, gx, gz, 1, dt); else { m.wishX = dx / d; m.wishZ = dz / d; } }
+  if (Math.abs(m.wishX) + Math.abs(m.wishZ) > 0.01) m.yaw += clamp(angDiff(m.yaw, Math.atan2(-m.wishX, -m.wishZ)), -8 * dt, 8 * dt);
+  if (m.onGround && (m.hitX || m.hitZ)) jumpBody(m);
+  return d;
+}
+function vFace(m, x, z, dt) { m.yaw += clamp(angDiff(m.yaw, Math.atan2(-(x - m.x), -(z - m.z))), -8 * dt, 8 * dt); }
+function vProduce(m) { if (++m.prog < (m.role === 'farmer' ? 2 : 3)) return; m.prog = 0; let b = null; for (const o of m.offers) if (o.s < o.max && (!b || o.s / o.max < b.s / b.max)) b = o; if (b) b.s++; }
+function vHome(m, spd, dt, sleep) {
+  const h = m.home;
+  if (m.inside) { if (vGo(m, h.x, h.z, spd, dt, 0.5) < 0.7) m.crouch = !!sleep; }
+  else if (vGo(m, h.out.x, h.out.z, spd, dt, 0.9) < 1.8) vGo(m, h.x, h.z, spd, dt, 0.5);
+}
+function vWork(m, v, dt) {
+  const br = m.brain;
+  if (m.role === 'farmer') {
+    let c = m.cell;
+    if (!c || c.st !== 2) { if (c) c.taken = null; c = m.cell = null; let bd = 1e9; for (const k of v.cells) if (k.st === 2 && !k.taken) { const d = Math.hypot(k.x - m.x, k.z - m.z); if (d < bd) { bd = d; c = k; } } if (c) { c.taken = m; m.cell = c; m.wT = 0; } }
+    if (c) {
+      if (vGo(m, c.x + 0.5, c.z + 1.5, 2.4, dt, 0.5) < 0.9) {
+        vFace(m, c.x + 0.5, c.z + 0.5, dt); m.wT = (m.wT || 0) + dt; if (m.wT % 0.9 < dt) m.swing = 1;
+        if (m.wT > 2.4) { c.st = 1; c.t = G.t + rnd(40, 70); c.taken = null; m.cell = null; G.world.setBlock(c.x, c.y, c.z, BK.tallgrass, true); vProduce(m); }
+      }
+      return;
+    }
+  } else if (m.role === 'smith' || m.role === 'elder') {
+    const s = m.role === 'smith' ? v.smith : v.stall;
+    if (vGo(m, s.x, s.z, 2.3, dt, 0.4) < 0.8) {
+      if (m.role === 'smith') { vFace(m, s.x - 2, s.z, dt); if ((m.wT = (m.wT || 0) + dt) % 1.1 < dt) m.swing = 1; } else { vFace(m, s.x, s.z - 5, dt); m.wT = (m.wT || 0) + dt; }
+      if (m.wT > (m.role === 'smith' ? 7 : 9)) { m.wT = 0; vProduce(m); }
+    }
+    return;
+  }
+  if (br.t <= 0) { br.t = rnd(3, 7); br.dir = rnd(0, TAU); br.state = Math.random() < 0.6 ? 'walk' : 'idle'; if (Math.hypot(m.x - v.cx, m.z - v.cz) > 22) { br.dir = Math.atan2(v.cz - m.z, v.cx - m.x); br.state = 'walk'; } }
+  if (br.state === 'walk') { m.speed = 1.5; m.wishX = Math.cos(br.dir) * 0.6; m.wishZ = Math.sin(br.dir) * 0.6; m.yaw += clamp(angDiff(m.yaw, Math.atan2(-m.wishX, -m.wishZ)), -4 * dt, 4 * dt); if ((m.hitX || m.hitZ) && m.onGround) jumpBody(m); }
+}
+function vUpdate(m, dt) {
+  if (m.dead) return; const v = m.village, P = G.P, br = m.brain, dP = Math.hypot(P.x - m.x, P.z - m.z);
+  if (dP > 100) return; // far from the player: freeze to save CPU
+  m.wishX = m.wishZ = 0; m.jumpHeld = false; m.crouch = false; br.t -= dt; br.atkCd -= dt; m.swing = Math.max(0, (m.swing || 0) - dt * 2);
+  if (m.inWater) m.jumpHeld = true;
+  const sun = Math.sin((G.tod - 0.25) * TAU), night = sun < -0.05, dusk = !night && G.tod > 0.5 && sun < 0.35;
+  m.inside = Math.abs(m.x - m.home.x) < 2.3 && Math.abs(m.z - m.home.z) < 2.3;
+  let foe = null, fd = 1e9;
+  for (const o of G.mobs) if (!o.dead && o.hostile) { const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < fd) { fd = d; foe = o; } }
+  if (m.role === 'guard') {
+    let tg = foe && fd < 24 && Math.hypot(foe.x - v.cx, foe.z - v.cz) < 42 ? foe : null, td = fd;
+    if (!tg && v.angry > 0 && dP < 32 && !P.dead) { tg = P; td = dP; }
+    if (tg) { vFace(m, tg.x, tg.z, dt); if (td > 1.9) vGo(m, tg.x, tg.z, 4.1, dt, 1.5); else if (br.atkCd <= 0) { br.atkCd = 0.85; m.swing = 1; damageEnt(tg, tg === P ? 9 : 18, m, { x: tg.x, y: tg.y + 1.1, z: tg.z }); } }
+    else { const p = v.patrol[m.pi]; if (vGo(m, p[0], p[1], 2.6, dt, 1.4) < 1.8) { if (!m.wait) m.wait = rnd(3, 7); if ((m.wait -= dt) <= 0) { m.wait = 0; m.pi = (m.pi + 1) % v.patrol.length; } } }
+  } else if (m.fleeT > 0 || (fd < 9 && !m.inside)) { m.fleeT = Math.max(0, (m.fleeT || 0) - dt); vHome(m, 4.4, dt, false); }
+  else if (night) vHome(m, 2.6, dt, true);
+  else if (dusk) vGo(m, v.well.x + Math.cos(m.angle) * 3.6, v.well.z + Math.sin(m.angle) * 3.6, 2.2, dt, 0.8);
+  else vWork(m, v, dt);
+  physics(m, dt);
+}
+function vTick(dt) {
+  const w = G.world, P = G.P; if (G.mode !== 'survival' || !G.started || !w.villages) return;
+  for (const v of w.villages) {
+    v.angry = Math.max(0, v.angry - dt);
+    for (const c of v.cells) if (c.st === 1 && G.t > c.t) { c.st = 2; w.setBlock(c.x, c.y, c.z, BK.flower_y, true); }
+    const d = Math.hypot(P.x - v.cx, P.z - v.cz);
+    if (d < 32 && !v.seen) { v.seen = true; HUD.banner(v.name.toUpperCase(), 'Village · press E to trade with villagers', '#7ad06a'); } else if (d > 80) v.seen = false;
+    if (G.t > v.nextSpawn) { // newcomers arrive when the village is short-handed
+      v.nextSpawn = G.t + 8; const have = {}; for (const m of G.mobs) if (m.vil && m.village === v && !m.dead) have[m.role] = (have[m.role] || 0) + 1;
+      const need = Object.keys(V_CREW).find(r => (have[r] || 0) < V_CREW[r]);
+      if (need && d > 24) { G.mobs.push(vMake(v, need, Math.floor(Math.random() * 4))); v.nextSpawn = G.t + 75; }
+    }
+  }
+}
+
+/* ---------- trading UI ---------- */
+const VT = { m: null };
+function vPrompt(P) {
+  if (G.mode !== 'survival') return;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 3.6;
+  for (const m of G.mobs) { if (!m.vil || m.dead) continue; const dx = m.x - P.x, dz = m.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.3) { best = m; bd = d; } }
+  if (best) G.prompt = { text: (best.role === 'guard' ? 'Talk to ' : 'Trade with ') + best.name, vil: best };
+}
+function vOpenTrade(m) {
+  if (m.role === 'guard') { HUD.toast(pick(['"Stay sharp out there, traveller."', '"Nothing gets past me after dark."', '"The farmers keep us fed. Mind the crops."', '"Zombies hate lamplight. So do I, honestly."'])); return; }
+  VT.m = m; UI.openPanel('tradepanel'); $('tradepanel').classList.add('on'); vRenderTrade();
+}
+function vCloseTrade() { UI.closeAllPanels(); UI.requestLock(); }
+function vRenderTrade() {
+  const m = VT.m, P = G.P, L = $('tr-list'); if (!m) return;
+  $('tr-title').textContent = m.name; $('tr-sub').textContent = { farmer: 'Fresh from the fields — restocked as I work.', smith: 'Honest steel, fair prices.', elder: 'Rare goods for rare finds.' }[m.role];
+  L.innerHTML = '';
+  m.offers.forEach(o => {
+    const out = mkStack(o.o[0], o.o[1], o.o[2]), ok = invHas(P.inv, o.g) && o.s > 0 && canAdd(P.inv, out);
+    const ing = Object.keys(o.g).map(k => '<span class="ig"' + (invCount(P.inv, k) < o.g[k] ? ' style="color:var(--bad)"' : '') + '><img src="' + iconURL(mkStack(k, 1, 0), 16) + '">' + o.g[k] + ' ' + esc(ITEM[k].name) + '</span>').join('');
+    const row = el('div', 'rec ' + (ok ? 'ok' : 'lock'), '<img src="' + iconURL(out, 40) + '"><div class="ri"><div class="rn" style="color:' + itemColor(out) + '">' + esc(itemName(out)) + (o.o[1] > 1 ? ' ×' + o.o[1] : '') + '</div><div class="ing">' + ing + '</div></div><div class="rs">' + (o.s > 0 ? o.s + ' in stock' : 'Restocking…') + '</div>');
+    row.onclick = () => { if (!ok) { Snd.play('click'); return; } for (const k in o.g) invTake(P.inv, k, o.g[k]); invAdd(P.inv, out); o.s--; G.invDirty = true; Snd.play('pickup', { r: 3 }); HUD.pickup(out, o.o[1]); vRenderTrade(); };
+    L.appendChild(row);
+  });
+}
+$('tr-close').addEventListener('click', vCloseTrade);
+window.addEventListener('keydown', e => { if (G.uiOpen === 'tradepanel' && (e.code === 'Escape' || e.code === 'KeyE')) { e.preventDefault(); e.stopImmediatePropagation(); vCloseTrade(); } }, true);
+const _vClose = UI.closeAllPanels; UI.closeAllPanels = function (k) { $('tradepanel').classList.remove('on'); return _vClose.call(this, k); };
+
+/* ---------- hooks into the base game ---------- */
+const _vSetup = setupSurvival; setupSurvival = function () { _vSetup(); vSpawnAll(); };
+const _vMob = mobUpdate; mobUpdate = function (m, dt) { if (m.vil) vUpdate(m, dt); else _vMob(m, dt); };
+const _vFoes = enemiesOf; enemiesOf = function (b) { const o = _vFoes(b); if (b && b.kind === 'mob' && b.hostile) for (const v of G.mobs) if (v.vil && !v.dead) o.push(v); return o; };
+const _vSurv = survivalTick; survivalTick = function (dt) { _vSurv(dt); vTick(dt); };
+
 boot();
 </script>
 <script>
