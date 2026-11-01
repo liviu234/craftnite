@@ -4454,7 +4454,8 @@ function playerUpdate(P, dt) {
   if (I.pressed.KeyQ && !P.creative && G.modeName !== 'creative-x') { P.buildMode = !P.buildMode; P.using = null; HUD.equip(); Snd.play('click'); HUD.hint('build', 'Build mode: 1-4 choose Wall/Floor/Ramp/Roof, F/Z or 5-8 change material, B builds, G edits, R repairs.'); }
   if (I.pressed.KeyQ && P.creative) { P.buildMode = !P.buildMode; HUD.equip(); Snd.play('click'); }
   if (I.pressed.KeyV) { setCamView(G.camMode === 'first' ? 'third' : 'first'); }
-  if (I.pressed.KeyX) { const s = P.inv[P.sel]; if (s && !(s.id === 'pickaxe' && s.r === 0 && invCount(P.inv, 'pickaxe') === 1)) { spawnDrop(Object.assign({}, s), P.x - Math.sin(P.yaw) * 0.8, P.y + 1.2, P.z - Math.cos(P.yaw) * 0.8, -Math.sin(P.yaw) * 4, 3, -Math.cos(P.yaw) * 4, 1.2); P.inv[P.sel] = null; G.invDirty = true; Snd.play('click'); } }
+  if (I.pressed.KeyX && P.inv[P.sel] && (P.inv[P.sel].id === 'steak' || P.inv[P.sel].id === 'meat') && P.inv[P.sel].n > 1) { const s = P.inv[P.sel]; s.n--; spawnDrop(Object.assign({}, s, { n: 1 }), P.x - Math.sin(P.yaw) * 0.8, P.y + 1.2, P.z - Math.cos(P.yaw) * 0.8, -Math.sin(P.yaw) * 5, 3, -Math.cos(P.yaw) * 5, 0.3); G.invDirty = true; Snd.play('click'); }
+  else if (I.pressed.KeyX) { const s = P.inv[P.sel]; if (s && !(s.id === 'pickaxe' && s.r === 0 && invCount(P.inv, 'pickaxe') === 1)) { spawnDrop(Object.assign({}, s), P.x - Math.sin(P.yaw) * 0.8, P.y + 1.2, P.z - Math.cos(P.yaw) * 0.8, -Math.sin(P.yaw) * 4, 3, -Math.cos(P.yaw) * 4, 1.2); P.inv[P.sel] = null; G.invDirty = true; Snd.play('click'); } }
   // ---- aim state ----
   const gunHeld = hit && hit.type === 'gun' && !P.buildMode;
   G.aimHeld = gunHeld && I.rmb; G.zoomSens = 0.7;
@@ -5691,6 +5692,7 @@ function vMake(v, role, i, d) {
   const skin = d && d.skin != null ? d.skin : parseInt(SKIN_TONES[Math.floor(Math.random() * SKIN_TONES.length)].slice(1), 16); m.skinC = skin;
   if (d) { m.hp = clamp(+d.hp || hp, 1, hp); m.prog = d.prog | 0; m.yaw = +d.yaw || 0; (d.s || []).forEach((n, k) => { if (m.offers[k]) m.offers[k].s = clamp(n | 0, 0, m.offers[k].max); }); }
   m.model = buildBiped({ skin, hair: R.hair, shirt: R.shirt, pants: R.pants, hat: R.hat || 0 });
+  if (d) { m.love = Math.max(0, +d.l || 0); m.breedCd = Math.max(0, +d.bc || 0); if (d.b) vBaby(m, +d.ag || 0); }
   const hd = m.model.userData.head, nose = new THREE.Mesh(boxGeo(0.1, 0.16, 0.1), lam(skin)); nose.position.set(0, -0.04, -0.3); hd.add(nose);
   if (role === 'farmer') for (const [w, h, y] of [[0.9, 0.05, 0.3], [0.5, 0.14, 0.38]]) { const s = new THREE.Mesh(boxGeo(w, h, w), lam(0xd9b85a)); s.position.y = y; hd.add(s); }
   if (role === 'guard') { m.inv = makeInv(); m.inv[0] = mkStack('sword', 1, 1); m.sel = 0; }
@@ -5711,9 +5713,9 @@ function vSpawnAll() {
 function vPack() {
   const w = G.world;
   return { v: w.villages.map(v => ({ a: Math.round(v.angry), c: v.cells.map(c => c.st === 2 ? 0 : Math.max(1, Math.ceil(c.t - G.t))) })),
-    m: G.mobs.filter(m => m.vil && !m.dead).map(m => ({ v: w.villages.indexOf(m.village), r: m.role, i: m.homeI | 0, name: m.name, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), yaw: +m.yaw.toFixed(2), hp: Math.round(m.hp), prog: m.prog, skin: m.skinC, s: m.offers.map(o => o.s) })) };
+    m: G.mobs.filter(m => m.vil && !m.dead).map(m => ({ v: w.villages.indexOf(m.village), r: m.role, i: m.homeI | 0, name: m.name, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), yaw: +m.yaw.toFixed(2), hp: Math.round(m.hp), prog: m.prog, skin: m.skinC, s: m.offers.map(o => o.s), l: Math.round(m.love || 0), bc: Math.round(m.breedCd || 0), b: m.baby ? 1 : 0, ag: Math.round(m.age || 0) })) };
 }
-const _vPack = Save.pack; Save.pack = function (mode) { const d = _vPack.call(this, mode); if (mode === 'survival' && G.world && G.world.villages) d.vil = vPack(); return d; };
+const _vPack = Save.pack; Save.pack = function (mode) { const d = _vPack.call(this, mode); if ((mode === 'survival' || mode === 'creative') && G.world && G.world.villages) d.vil = vPack(); return d; };
 function vGo(m, gx, gz, spd, dt, stop) {
   const dx = gx - m.x, dz = gz - m.z, d = Math.hypot(dx, dz); m.speed = spd;
   if (d > (stop || 0.6)) { if (d > 7 && !m.inside) followPath(m, gx, gz, 1, dt); else { m.wishX = dx / d; m.wishZ = dz / d; } }
@@ -5751,6 +5753,40 @@ function vWork(m, v, dt) {
   if (br.t <= 0) { br.t = rnd(3, 7); br.dir = rnd(0, TAU); br.state = Math.random() < 0.6 ? 'walk' : 'idle'; if (Math.hypot(m.x - v.cx, m.z - v.cz) > 22) { br.dir = Math.atan2(v.cz - m.z, v.cx - m.x); br.state = 'walk'; } }
   if (br.state === 'walk') { m.speed = 1.5; m.wishX = Math.cos(br.dir) * 0.6; m.wishZ = Math.sin(br.dir) * 0.6; m.yaw += clamp(angDiff(m.yaw, Math.atan2(-m.wishX, -m.wishZ)), -4 * dt, 4 * dt); if ((m.hitX || m.hitZ) && m.onGround) jumpBody(m); }
 }
+/* ---------- feeding & breeding: throw steak or raw meat (X) at villagers ---------- */
+const V_FOOD = { steak: 1, meat: 1 }, V_CAP = 12, V_GROW = 300, V_LOVE = 40, V_BREED_CD = 240;
+function vPop(v) { let n = 0; for (const q of G.mobs) if (q.vil && !q.dead && q.village === v) n++; return n; }
+function vBaby(m, age) { m.baby = true; m.age = age || 0; m.w = 0.42; m.h = 1.05; m.eye = 0.85; if (m.model) m.model.scale.setScalar(0.58); }
+function vGrow(m) { m.baby = false; m.age = 0; m.w = 0.6; m.h = 1.8; m.eye = 1.5; if (m.model) m.model.scale.setScalar(1); if (G.P && Math.hypot(G.P.x - m.x, G.P.z - m.z) < 40) HUD.toast(m.name + ' grew up!'); }
+function vHearts(m) { if (G.rend) G.rend.burst(m.x, m.y + m.h + 0.2, m.z, 0xff6fa8, 7, 1.6, 0.12, 0.9, -3); }
+function vBorn(a, b) {
+  const v = a.village, role = pick(['farmer', 'farmer', 'smith', 'elder']), kid = vMake(v, role, Math.floor(Math.random() * 4));
+  kid.x = (a.x + b.x) / 2; kid.y = Math.max(a.y, b.y); kid.z = (a.z + b.z) / 2; kid.name = V_FIRST[Math.floor(Math.random() * V_FIRST.length)] + ' (child)'; vBaby(kid, 0); G.mobs.push(kid);
+  a.love = b.love = 0; a.loveT = b.loveT = 0; a.breedCd = b.breedCd = V_BREED_CD; vHearts(a); vHearts(b); vHearts(kid);
+  Snd.play('heal', { x: kid.x, y: kid.y, z: kid.z, vol: 0.6 }); if (G.P && Math.hypot(G.P.x - kid.x, G.P.z - kid.z) < 70) HUD.toast('A baby villager was born in ' + v.name + '!');
+}
+function vBreedStep(m, dt) { // timers, eating thrown food, finding a partner; returns a spot to walk to (or null)
+  m.love = Math.max(0, (m.love || 0) - dt); m.breedCd = Math.max(0, (m.breedCd || 0) - dt);
+  if (m.baby) { m.age = (m.age || 0) + dt; if (m.age >= V_GROW) vGrow(m); return null; }
+  const eligible = m.love <= 0 && m.breedCd <= 0;
+  if (eligible) {
+    for (let i = G.drops.length - 1; i >= 0; i--) {
+      const d = G.drops[i]; if (!V_FOOD[d.stack.id] || d.age < 0.3) continue;
+      if (Math.abs(d.x - m.x) > 1.5 || Math.abs(d.z - m.z) > 1.5 || Math.abs(d.y - m.y - 0.6) > 2.5) continue;
+      if (vPop(m.village) >= V_CAP) { if (!m.fullT || G.t - m.fullT > 8) { m.fullT = G.t; HUD.toast(m.village.name + ' has no room for more villagers', true); } break; }
+      d.stack.n--; if (d.stack.n <= 0) removeDrop(i); m.love = V_LOVE; m.heartT = 0; vHearts(m); Snd.play('pickup', { x: m.x, y: m.y, z: m.z, vol: 0.5 }); HUD.toast(m.name + ' loves the food!'); break;
+    }
+  }
+  if (m.love > 0) {
+    m.heartT = (m.heartT || 0) - dt; if (m.heartT <= 0) { m.heartT = 1.4; vHearts(m); }
+    let best = null, bd = 1e9; for (const o of G.mobs) { if (o === m || !o.vil || o.dead || o.baby || !(o.love > 0) || o.village !== m.village) continue; const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < bd) { bd = d; best = o; } }
+    if (best) { if (bd < 3.2) { m.loveT = (m.loveT || 0) + dt; if (m.loveT > 2.5) { vBorn(m, best); return null; } } else m.loveT = 0; return best; }
+    m.loveT = 0; return null;
+  }
+  if (eligible && m.role !== 'guard') { let bd = 12, best = null; for (const d of G.drops) { if (!V_FOOD[d.stack.id] || d.age < 0.3) continue; const q = Math.hypot(d.x - m.x, d.z - m.z); if (q < bd && Math.abs(d.y - m.y) < 6) { bd = q; best = d; } } if (best && vPop(m.village) < V_CAP) return best; }
+  return null;
+}
+function vSeekMove(m, x, z, dt) { m.wishX = m.wishZ = 0; m.jumpHeld = !!m.inWater; m.crouch = false; m.swing = Math.max(0, (m.swing || 0) - dt * 2); m.inside = false; vGo(m, x, z, 2.6, dt, 1.2); physics(m, dt); }
 function vUpdate(m, dt) {
   if (m.dead) return; const v = m.village, P = G.P, br = m.brain, dP = Math.hypot(P.x - m.x, P.z - m.z);
   if (dP > 100) return; // far from the player: freeze to save CPU
@@ -5772,12 +5808,12 @@ function vUpdate(m, dt) {
   physics(m, dt);
 }
 function vTick(dt) {
-  const w = G.world, P = G.P; if (G.mode !== 'survival' || !G.started || !w.villages) return;
+  const w = G.world, P = G.P; if ((G.mode !== 'survival' && G.mode !== 'creative') || !G.started || !w.villages) return;
   for (const v of w.villages) {
     v.angry = Math.max(0, v.angry - dt);
     for (const c of v.cells) if (c.st === 1 && G.t > c.t) { c.st = 2; w.setBlock(c.x, c.y, c.z, BK.flower_y, true); }
     const d = Math.hypot(P.x - v.cx, P.z - v.cz);
-    if (d < 32 && !v.seen) { v.seen = true; HUD.banner(v.name.toUpperCase(), 'Village · press E to trade with villagers', '#7ad06a'); } else if (d > 80) v.seen = false;
+    if (d < 32 && !v.seen) { v.seen = true; HUD.banner(v.name.toUpperCase(), 'Village · E trades · throw steak or raw meat (X) at two villagers to breed them', '#7ad06a'); } else if (d > 80) v.seen = false;
     if (G.t > v.nextSpawn) { // newcomers arrive when the village is short-handed
       v.nextSpawn = G.t + 8; const have = {}; for (const m of G.mobs) if (m.vil && m.village === v && !m.dead) have[m.role] = (have[m.role] || 0) + 1;
       const need = Object.keys(V_CREW).find(r => (have[r] || 0) < V_CREW[r]);
@@ -5789,9 +5825,9 @@ function vTick(dt) {
 /* ---------- trading UI ---------- */
 const VT = { m: null };
 function vPrompt(P) {
-  if (G.mode !== 'survival') return;
+  if (G.mode !== 'survival' && G.mode !== 'creative') return;
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 3.6;
-  for (const m of G.mobs) { if (!m.vil || m.dead) continue; const dx = m.x - P.x, dz = m.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.3) { best = m; bd = d; } }
+  for (const m of G.mobs) { if (!m.vil || m.dead || m.baby) continue; const dx = m.x - P.x, dz = m.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.3) { best = m; bd = d; } }
   if (best) G.prompt = { text: (best.role === 'guard' ? 'Talk to ' : 'Trade with ') + best.name, vil: best };
 }
 function vOpenTrade(m) {
@@ -5817,6 +5853,16 @@ const _vClose = UI.closeAllPanels; UI.closeAllPanels = function (k) { $('tradepa
 
 /* ---------- hooks into the base game ---------- */
 const _vSetup = setupSurvival; setupSurvival = function () { _vSetup(); vSpawnAll(); };
+const _vSetupC = setupCreative; setupCreative = function () { _vSetupC(); vSpawnAll(); }; /* villagers live (and save) in Creative worlds too */
+const _vSess = sessionUpdate; sessionUpdate = function (dt) { _vSess(dt); if (G.mode === 'creative' && G.started && !G.paused && G.P) vTick(dt); };
+const _vUpdBase = vUpdate;
+vUpdate = function (m, dt) {
+  if (m.dead) return; const P = G.P; if (Math.hypot(P.x - m.x, P.z - m.z) > 100) return;
+  const tgt = vBreedStep(m, dt), night = Math.sin((G.tod - 0.25) * TAU) < -0.05;
+  if (tgt && !night && !(m.fleeT > 0)) { vSeekMove(m, tgt.x, tgt.z, dt); return; }
+  if (m.baby) { const r = m.role; m.role = 'kid'; _vUpdBase(m, dt); m.role = r; return; }
+  _vUpdBase(m, dt);
+};
 const _vMob = mobUpdate; mobUpdate = function (m, dt) { if (m.vil) vUpdate(m, dt); else _vMob(m, dt); };
 const _vFoes = enemiesOf; enemiesOf = function (b) { const o = _vFoes(b); if (b && b.kind === 'mob' && b.hostile) for (const v of G.mobs) if (v.vil && !v.dead) o.push(v); return o; };
 const _vSurv = survivalTick; survivalTick = function (dt) { _vSurv(dt); vTick(dt); };
